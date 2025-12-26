@@ -7,13 +7,12 @@ import { useRouter } from 'next/navigation'
 import CreateModal from './CreateModal' 
 // Import Generator QR
 import QRCode from "react-qr-code"
-// Import Ikon
+// Import Ikon (SUDAH DIBERSIHKAN: HAPUS SETTINGS & X)
 import { 
   Copy, ExternalLink, Trash2, MapPin, ShoppingBag, 
-  MousePointerClick, Link2, QrCode, 
-  Settings, User, Star, LogOut, Plus, LayoutDashboard, MessageSquare, Calendar
+  MousePointerClick, Link2, QrCode,
+  User, Star, LogOut, Plus, LayoutDashboard, MessageSquare, Calendar
 } from 'lucide-react' 
-// Note: Icon X sudah tidak di-import karena dihapus
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
@@ -102,10 +101,9 @@ export default function DashboardPage() {
         userId={user.id}
       />
 
-      {/* MODAL TAMPILKAN QR CODE (CLEAN VERSION: TANPA TOMBOL X) */}
+      {/* MODAL TAMPILKAN QR CODE (CLEAN: TANPA X) */}
       {qrData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-300">
-            {/* Padding dikembalikan normal (p-8) karena tidak ada X yang mengganggu */}
             <div className="bg-zinc-900 border border-yellow-500 rounded-3xl p-8 max-w-sm w-full text-center relative shadow-[0_0_50px_rgba(234,179,8,0.2)]">
                 
                 {/* JUDUL QR */}
@@ -122,7 +120,7 @@ export default function DashboardPage() {
                     <p className="text-yellow-500 font-mono text-[10px] break-all">{qrData}</p>
                 </div>
                 
-                {/* TOMBOL TUTUP (SATU-SATUNYA CARA KELUAR) */}
+                {/* TOMBOL TUTUP */}
                 <button onClick={() => setQrData(null)} className="w-full py-4 rounded-xl bg-transparent border border-yellow-500 text-yellow-500 font-bold text-xs uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-all shadow-[0_0_15px_rgba(234,179,8,0.1)] cursor-pointer">
                     Tutup / Selesai
                 </button>
