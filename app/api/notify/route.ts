@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-// ⚠️ PENTING: Pake SERVICE_ROLE_KEY biar bisa edit data user siapapun
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! 
-);
+// ❌ DULU DISINI (DIHAPUS BIAR GAK ERROR PAS BUILD)
 
 export async function POST(req: Request) {
   try {
+    // ✅ PINDAH KESINI (SEKARANG AMAN)
+    // Supabase baru dipanggil pas ada request masuk, bukan pas build.
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     const notification = await req.json();
 
     // 1. AMBIL DATA DARI MIDTRANS
@@ -44,35 +47,35 @@ export async function POST(req: Request) {
 
     // Kalau transaksi gak ketemu, stop disini.
     if (error || !trxData) {
-        console.log("❌ Transaksi tidak ditemukan:", orderId);
-        return NextResponse.json({ message: "Order not found" }, { status: 404 });
+      console.log("❌ Transaksi tidak ditemukan:", orderId);
+      return NextResponse.json({ message: "Order not found" }, { status: 404 });
     }
 
     // 🔥 4. BAGIAN UTAMA: AUTO UPGRADE & SET TANGGAL 🔥
     // Kalau statusnya 'paid' (Lunas), jalankan logika ini:
     if (paymentStatus === "paid") {
-        
-        // A. HITUNG TANGGAL BERAKHIR (DURASI)
-        const currentDate = new Date();
-        const expiryDate = new Date();
-        
-        // Tambah 30 Hari dari hari ini (Sesuaikan: mau 30, 365, dll)
-        expiryDate.setDate(currentDate.getDate() + 30); 
+      
+      // A. HITUNG TANGGAL BERAKHIR (DURASI)
+      const currentDate = new Date();
+      const expiryDate = new Date();
+      
+      // Tambah 30 Hari dari hari ini (Sesuaikan: mau 30, 365, dll)
+      expiryDate.setDate(currentDate.getDate() + 30); 
 
-        // B. UPDATE PROFIL USER (Ubah Pangkat & Tanggal)
-        const { error: upgradeError } = await supabaseAdmin
-            .from("profiles")
-            .update({
-                subscription_plan: "pro", // <--- UBAH JADI PRO/BASIC
-                subscription_end_date: expiryDate.toISOString() // <--- SET TANGGAL HABIS
-            })
-            .eq("id", trxData.user_id); // Target user yang bayar tadi
-            
-        if (upgradeError) {
-            console.error("❌ Gagal Upgrade User:", upgradeError);
-        } else {
-            console.log(`✅ User ${trxData.user_id} BERHASIL DI-UPGRADE SAMPAI ${expiryDate.toISOString()}`);
-        }
+      // B. UPDATE PROFIL USER (Ubah Pangkat & Tanggal)
+      const { error: upgradeError } = await supabaseAdmin
+        .from("profiles")
+        .update({
+          subscription_plan: "pro", // <--- UBAH JADI PRO/BASIC
+          subscription_end_date: expiryDate.toISOString() // <--- SET TANGGAL HABIS
+        })
+        .eq("id", trxData.user_id); // Target user yang bayar tadi
+        
+      if (upgradeError) {
+        console.error("❌ Gagal Upgrade User:", upgradeError);
+      } else {
+        console.log(`✅ User ${trxData.user_id} BERHASIL DI-UPGRADE SAMPAI ${expiryDate.toISOString()}`);
+      }
     }
 
     return NextResponse.json({ status: "OK" });
