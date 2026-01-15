@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation"; 
+// 🔥 1. IMPORT SUPABASE BIAR BISA CEK LOGIN
+import { supabase } from "@/lib/supabase"; 
+
 import { 
   Star, Shield, MessageCircle, BarChart3, 
   CheckCircle2, ArrowRight, Play, Sparkles
@@ -14,7 +17,33 @@ import Navbar from "@/components/Navbar";
 export default function LandingPage() {
   const router = useRouter();
 
-  // 1️⃣ LOAD SCRIPT MIDTRANS
+  // 🔥 2. LOGIKA BARU: AUTO-REDIRECT KE DASHBOARD 🔥
+  useEffect(() => {
+    const checkUser = async () => {
+      // Cek apakah user sebenernya udah login (punya sesi)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Kalau udah login, langsung lempar ke Dashboard
+      if (session) {
+        console.log("User sudah login, redirect ke dashboard...");
+        router.replace("/dashboard");
+      }
+
+      // Dengerin kalau tiba-tiba login berhasil (misal dari redirect URL tadi)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+             router.replace("/dashboard");
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    };
+
+    checkUser();
+  }, [router]);
+
+
+  // 3️⃣ LOAD SCRIPT MIDTRANS (TETAP SAMA)
   useEffect(() => {
     const snapScript = "https://app.sandbox.midtrans.com/snap/snap.js";
     const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "";
@@ -31,7 +60,7 @@ export default function LandingPage() {
     }
   }, []);
 
-  // 2️⃣ FUNGSI BAYAR
+  // 4️⃣ FUNGSI BAYAR (TETAP SAMA)
   const handleBuy = async (plan: string, price: number) => {
     try {
         console.log(`Processing buy: ${plan} - ${price}`); 
@@ -94,7 +123,6 @@ export default function LandingPage() {
             <Star size={12} className="fill-amber-500" /> #1 Manajer Reputasi
           </div>
           
-          {/* 👇 UPDATE: Headline Baru Opsi 3 */}
           <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-8 leading-tight">
             Reputasi Lebih Baik,<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500">
@@ -118,16 +146,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* --- SOCIAL PROOF (UPDATE: Hapus Klaim 500+) --- */}
+      {/* --- SOCIAL PROOF --- */}
       <section className="py-10 border-y border-white/5 bg-black/50">
           <div className="max-w-7xl mx-auto px-6 text-center">
-              {/* 👇 UPDATE: Copywriting lebih aman & jujur */}
               <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-8">
                 Dirancang untuk Berbagai Bisnis Modern
               </p>
               
               <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-40 grayscale hover:opacity-100 transition duration-500 cursor-default">
-                  {/* Logo-logo ini sekarang jadi REPRESENTASI kategori bisnis, bukan klaim klien */}
                   <span className="text-xl font-black tracking-widest uppercase" title="Coffee Shop">KopiSenja</span>
                   <span className="text-xl font-black italic" title="F&B">BURGER.CO</span>
                   <span className="text-xl font-black tracking-tighter" title="Barbershop">BarberKing</span>

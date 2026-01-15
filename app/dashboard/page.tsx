@@ -57,11 +57,7 @@ export default function Dashboard() {
         // 1. Cek User Login
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
-            if (isMounted) {
-                // 🔥 UPDATE: Ganti router.push jadi window.location.href
-                // Ini maksa browser pindah sesuai domain asli (Vercel), bukan cache localhost
-                window.location.href = "/login"; 
-            }
+            if (isMounted) router.push("/login");
             return;
         }
 
@@ -153,9 +149,7 @@ export default function Dashboard() {
 
   // --- HELPER FUNCTIONS ---
   const copyToClipboard = (slug: string, id: string) => {
-    // Pastikan pakai origin browser (Vercel kalau di Vercel, Localhost kalau di Localhost)
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${origin}/${slug}`;
+    const url = `${window.location.origin}/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -166,12 +160,11 @@ export default function Dashboard() {
     else setExpandedQrId(id);
   };
 
-  // 🔥 FUNGSI DOWNLOAD QR CODE 🔥
+  // 🔥 FUNGSI BARU: DOWNLOAD QR CODE AGAR JADI FILE GAMBAR 🔥
   const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
     setDownloadingId(id);
     try {
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${origin}/${slug}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`;
         
         // 1. Ambil gambarnya dulu (Fetch)
         const response = await fetch(qrUrl);
@@ -193,10 +186,9 @@ export default function Dashboard() {
         window.URL.revokeObjectURL(url);
     } catch (error) {
         console.error("Gagal download:", error);
-        const origin = typeof window !== 'undefined' ? window.location.origin : '';
         alert("Gagal download otomatis. Membuka di tab baru...");
         // Fallback: Buka tab baru kalau gagal
-        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${origin}/${slug}`, '_blank');
+        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
     } finally {
         setDownloadingId(null);
     }
