@@ -10,17 +10,16 @@ import { supabase } from "@/lib/supabase";
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // 🔥 FUNGSI LOGIN "JURUS MABUK"
+  // 🔥 FUNGSI LOGIN FIXED (URL SESUAI VERCEL)
   const handleLogin = async () => {
-    // KITA PAKSA BALIK KE HOME (URL ASLI)
-    // Jangan pake localhost, jangan pake dashboard.
-    // Biar script di Home yang ngurus sisanya.
-    const siteUrl = "https://reviewboost.vercel.app"; 
+    // Kita pake URL Vercel yang aktif (yang ada typonya: reviw)
+    // Supaya Google gak bingung dan langsung redirect bener
+    const siteUrl = "https://reviw-boost.vercel.app"; 
     
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: siteUrl, // 👈 Balik ke Home
+        redirectTo: siteUrl, // 👈 Balik ke halaman depan URL yang bener
       },
     });
   };
