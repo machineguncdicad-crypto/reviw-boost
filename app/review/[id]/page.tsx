@@ -5,16 +5,15 @@ import { supabase } from "@/lib/supabase";
 import { Star, MessageCircle, Send, Loader2, ThumbsUp, MapPin, Sparkles } from "lucide-react";
 import { notFound } from "next/navigation";
 
-// Tipe Data (Nama tetap Campaign biar kodenya gak banyak berubah, tapi isinya kita sesuaikan)
+// Tipe Data
 type Campaign = {
   id: string;
-  brand_name: string;        // Nanti kita isi pakai business_name
-  google_review_link: string; // Nanti kita isi pakai google_map_url
+  brand_name: string;        
+  google_review_link: string; 
   user_id: string;
-  slug: string;              // Placeholder aja biar gak error
+  slug: string;              
 };
 
-// 👇 Perubahan 1: Params pakai ID, bukan Slug
 export default function ReviewPageLuxury({ params }: { params: { id: string } }) {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,11 +30,10 @@ export default function ReviewPageLuxury({ params }: { params: { id: string } })
     const fetchCampaign = async () => {
       if (!params?.id) return;
 
-      // 👇 Perubahan 2: Ambil dari tabel 'profiles', bukan 'campaigns'
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", params.id) // Cari pakai ID
+        .eq("id", params.id)
         .single();
 
       if (error || !data) {
@@ -43,20 +41,19 @@ export default function ReviewPageLuxury({ params }: { params: { id: string } })
         return; 
       }
 
-      // 👇 Mapping Data (Biar cocok sama kode lu)
       setCampaign({
           id: data.id,
-          brand_name: data.business_name || "Nama Toko", // Ambil dari business_name
-          google_review_link: data.google_map_url || "", // Ambil dari google_map_url
+          brand_name: data.business_name || "Nama Toko",
+          google_review_link: data.google_map_url || "",
           user_id: data.id,
-          slug: data.id // Dummy slug
+          slug: data.id
       });
       setLoading(false);
     };
     fetchCampaign();
   }, [params.id]);
 
-  // 2. FUNGSI SUBMIT (VERSI ANTI STUCK)
+  // 2. FUNGSI SUBMIT (YANG SUDAH DIPERBAIKI)
   const handleSubmit = async () => {
     if (rating === 0) return; 
     if (!campaign) return;
@@ -66,45 +63,44 @@ export default function ReviewPageLuxury({ params }: { params: { id: string } })
     try {
       console.log("Mencoba kirim ke database...");
 
-      // A. SIMPAN KE DATABASE
-      // 👇 Perubahan 3: Masuk ke tabel 'feedback' (singular)
+      // A. SIMPAN KE DATABASE (SUPABASE)
       const { error: dbError } = await supabase
-        .from("feedback") 
+        .from("feedbacks") 
         .insert({
-          user_id: campaign.id, // ID Owner
-          customer_name: "Pelanggan QR", // Default nama
-          phone: "-", // Default phone
+          campaign_id: campaign.id,
+          customer_name: "Pelanggan", // Default name
+          customer_phone: "-", 
           rating: rating,
           comment: comment,
-          status: rating >= 4 ? 'published' : 'blocked' // Smart Routing Logic
+          status: rating >= 4 ? 'published' : 'blocked'
         });
 
-      // 🔥 KALAU ERROR, LEMPAR KE CATCH BIAR KETAHUAN
       if (dbError) {
         console.error("Database Error:", dbError);
         throw new Error(dbError.message); 
       }
 
-      // B. BUNYIKAN ALARM (FIRE & FORGET) - Opsional kalau API belum ada dia bakal skip errornya
-      fetch('/api/notify', {
+      // 🔥 B. KIRIM NOTIFIKASI (FIXED) 🔥
+      // Kita pakai await biar yakin terkirim sebelum pindah halaman
+      await fetch('/api/notify', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-          campaign_id: campaign.id, 
           rating: rating,
           comment: comment,
-          brand_name: campaign.brand_name
+          brand_name: campaign.brand_name,
+          customer_name: "Pelanggan", // Kirim nama biar muncul di notif OneSignal
+          phone: "-" 
         })
-      }).catch(err => console.log("Notif error (ignored):", err));
+      });
 
       // C. SUKSES!
       setIsSubmitted(true);
 
     } catch (err: any) {
       console.error("SUBMIT ERROR:", err);
-      // 👇 MUNCULIN ALERT BIAR TAU KENAPA STUCK
       alert("Gagal kirim: " + (err.message || "Unknown Error"));
-      setIsSubmitting(false); // Matikan loading biar gak stuck
+      setIsSubmitting(false);
     }
   };
 

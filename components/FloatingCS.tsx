@@ -1,22 +1,55 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { MessageCircle, X, Send, Bot, User } from "lucide-react";
+import { MessageCircle, X, Send, Bot } from "lucide-react";
 
-export default function FloatingCS() {
-  // --- KONFIGURASI ---
-  // Ganti nomor ini pake nomor WA lu (Format: 62...)
-  const whatsappNumber = "6281224267299"; 
-  const adminName = "CS ReviewBoost";
+// 👇 Kita terima data dari luar (Props)
+interface FloatingCSProps {
+  ownerPhone?: string; // Nomor HP Owner
+  ownerName?: string;  // Nama Owner/Toko
+}
+
+export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
+  // --- KONFIGURASI DINAMIS ---
+  
+  // 🔥 INI NOMOR LU (DEFAULT) 🔥
+  // Kalau data owner kosong, chat akan masuk ke nomor ini (081224267199)
+  const defaultPhone = "6281224267199"; 
+  const defaultName = "CS ReviewBoost";
+
+  // Cek & Format Nomor HP Owner
+  const getFormattedPhone = () => {
+    // Prioritaskan nomor dari database (ownerPhone), kalau kosong pake defaultPhone
+    let phone = ownerPhone || defaultPhone;
+    
+    // Bersihin karakter aneh (spasi/strip)
+    phone = phone.replace(/\D/g, ''); 
+    
+    // Ubah 08xx jadi 628xx biar link WA jalan
+    if (phone.startsWith('0')) {
+      phone = '62' + phone.slice(1);
+    }
+    return phone;
+  };
+
+  const targetPhone = getFormattedPhone();
+  const targetName = ownerName || defaultName;
   // -------------------
 
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([
-    { role: 'assistant', content: "Halo Kak! 👋 Ada yang bisa dibantu soal ReviewBoost?" }
-  ]);
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Reset chat pas dibuka pertama kali
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+        setMessages([
+            { role: 'assistant', content: `Halo! 👋 Selamat datang di ${targetName}. Ada yang bisa kami bantu?` }
+        ]);
+    }
+  }, [isOpen, targetName]);
 
   // Auto scroll ke bawah tiap ada chat baru
   useEffect(() => {
@@ -33,22 +66,25 @@ export default function FloatingCS() {
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsTyping(true);
 
-    // 2. Bot "Pura-pura Mikir" selama 1.5 detik
+    // 2. Bot "Pura-pura Mikir" (1.5 detik)
     setTimeout(() => {
       setIsTyping(false);
       
       // 3. Bot Jawab Template
-      const reply = "Oke kak, pertanyaan ini akan dijawab langsung oleh Admin kami. Lanjut di WhatsApp ya biar fast respon! 👇";
+      const reply = "Baik kak, pesan kakak akan kami alihkan ke WhatsApp Admin agar lebih cepat dibalas ya! 👇";
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
 
-      // 4. Otomatis Buka WhatsApp dengan pesan user tadi
+      // 4. Otomatis Buka WhatsApp Owner
       setTimeout(() => {
-        const waLink = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(userMsg)}`;
+        const waLink = `https://wa.me/${targetPhone}?text=${encodeURIComponent(userMsg)}`;
         window.open(waLink, '_blank');
       }, 1000); // Jeda 1 detik setelah bot jawab
       
     }, 1500);
   };
+
+  // Jangan munculin tombol kalau nomor hp kosong banget (safety check)
+  if (!ownerPhone && !defaultPhone) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end font-sans">
@@ -67,8 +103,8 @@ export default function FloatingCS() {
                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-zinc-950"></div>
                 </div>
                 <div className="flex flex-col">
-                    <span className="font-bold text-sm">{adminName}</span>
-                    <span className="text-[10px] text-zinc-400">Online 24 Jam</span>
+                    <span className="font-bold text-sm truncate max-w-[150px]">{targetName}</span>
+                    <span className="text-[10px] text-zinc-400">Online</span>
                 </div>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:text-zinc-300 transition">
@@ -90,7 +126,7 @@ export default function FloatingCS() {
               </div>
             ))}
             
-            {/* Animasi Typing (Pura-pura mikir) */}
+            {/* Animasi Typing */}
             {isTyping && (
               <div className="flex justify-start">
                  <div className="bg-white dark:bg-zinc-800 border dark:border-zinc-700 p-3 rounded-2xl rounded-tl-none flex gap-1 shadow-sm items-center h-10">
@@ -110,7 +146,7 @@ export default function FloatingCS() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Ketik pertanyaan..."
+                placeholder="Tanya sesuatu..."
                 className="flex-1 bg-zinc-100 dark:bg-zinc-800 px-4 py-2 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 dark:text-white placeholder:text-zinc-500"
             />
             <button 
@@ -132,7 +168,7 @@ export default function FloatingCS() {
       >
         {isOpen ? <X size={24}/> : <MessageCircle size={26} className="fill-current"/>}
         
-        {/* Notif Badge Merah (Biar user penasaran klik) */}
+        {/* Notif Badge */}
         {!isOpen && (
              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
         )}

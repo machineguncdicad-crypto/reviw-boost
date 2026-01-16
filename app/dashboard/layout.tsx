@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image"; 
 import { usePathname } from "next/navigation"; 
-import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, ChevronRight, Sparkles } from "lucide-react"; 
+import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, ChevronRight, Sparkles, X } from "lucide-react"; // Tambah icon X
 import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation"; 
 import { useState } from "react";
@@ -14,6 +14,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  
+  // 🔥 STATE BARU: BUAT BUKA TUTUP MENU DI HP
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -33,7 +36,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-black text-white font-sans selection:bg-yellow-500/30">
       
-      {/* CSS EFEK PETIR */}
+      {/* CSS EFEK PETIR (TETAP SAMA) */}
       <style jsx global>{`
         @keyframes lightning {
           0%, 100% { filter: drop-shadow(0 0 0 transparent) brightness(1); }
@@ -49,9 +52,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       `}</style>
 
-      {/* --- SIDEBAR (VERSI MAKSA MUNCUL) --- */}
-      <aside className="w-72 bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen sticky top-0 z-50 shrink-0">
+      {/* 🔥 1. HEADER KHUSUS HP (Cuma muncul di layar kecil) 🔥 */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-4 z-40">
+          <div className="electric-logo w-24">
+             <Image src="/reviewboost.png" alt="Logo" width={100} height={30} className="w-full h-auto object-contain"/>
+          </div>
+          <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-zinc-400 hover:text-white">
+             <Menu size={24} />
+          </button>
+      </div>
+
+      {/* 🔥 2. OVERLAY GELAP (Muncul pas menu HP dibuka biar fokus) 🔥 */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* --- SIDEBAR (MODIFIKASI RESPONSIVE) --- */}
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen 
+          transition-transform duration-300 ease-in-out
+          ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"} 
+          md:translate-x-0 md:static md:shrink-0
+        `}
+      >
         
+        {/* TOMBOL CLOSE (Khusus HP) */}
+        <button 
+           onClick={() => setIsMobileMenuOpen(false)} 
+           className="absolute top-4 right-4 md:hidden text-zinc-400 hover:text-white p-2"
+        >
+           <X size={20} />
+        </button>
+
         {/* LOGO AREA */}
         <div className="p-6 pb-2 flex justify-center">
            <div className="electric-logo cursor-pointer relative w-full max-w-[160px]">
@@ -79,6 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link 
                 key={item.href}
                 href={item.href} 
+                onClick={() => setIsMobileMenuOpen(false)} // Tutup menu pas diklik (di HP)
                 className={`group flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                   isActive 
                     ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" 
@@ -111,7 +148,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* --- KONTEN UTAMA --- */}
-      <main className="flex-1 relative h-screen overflow-y-auto bg-black">
+      <main className="flex-1 relative h-screen overflow-y-auto bg-black pt-16 md:pt-0"> {/* Tambah padding top di HP biar ga ketutup header */}
         {/* Background Grid */}
         <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none fixed"></div>
         
