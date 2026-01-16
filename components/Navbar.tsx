@@ -4,25 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image"; 
 import { Menu, X, PlayCircle } from "lucide-react";
-// Import Supabase
-import { supabase } from "@/lib/supabase";
 
 const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  // 🔥 FUNGSI LOGIN FIXED (URL SESUAI VERCEL)
-  const handleLogin = async () => {
-    // Kita pake URL Vercel yang aktif (yang ada typonya: reviw)
-    // Supaya Google gak bingung dan langsung redirect bener
-    const siteUrl = "https://reviw-boost.vercel.app"; 
-    
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: siteUrl, // 👈 Balik ke halaman depan URL yang bener
-      },
-    });
-  };
 
   return (
     <nav className="fixed top-0 z-50 w-full border-b border-white/10 bg-black/80 backdrop-blur-md">
@@ -67,13 +51,13 @@ const Navbar = () => {
           </div>
 
           <div className="hidden items-center space-x-4 md:flex">
-            {/* BUTTON LOGIN */}
-            <button 
-                onClick={handleLogin} 
+            {/* ✅ FIXED: BUTTON MASUK SEKARANG PAKE LINK KE /login */}
+            <Link 
+                href="/login" 
                 className="text-sm font-medium text-white hover:text-yellow-500 transition-colors cursor-pointer"
             >
                 Masuk
-            </button>
+            </Link>
             
             <Link href="/register" className="rounded-full border border-yellow-500 px-5 py-2 text-sm font-bold text-yellow-500 transition-all hover:bg-yellow-500 hover:text-black hover:shadow-[0_0_20px_-5px_rgba(234,179,8,0.5)]">
               Daftar Gratis
@@ -96,12 +80,14 @@ const Navbar = () => {
              </Link>
              <div className="h-px bg-zinc-800 my-2"></div>
              
-             <button 
-                onClick={() => { handleLogin(); setMobileOpen(false); }} 
+             {/* ✅ FIXED: MOBILE MASUK JUGA PAKE LINK */}
+             <Link 
+                href="/login"
+                onClick={() => setMobileOpen(false)} 
                 className="text-center py-2 text-white font-bold hover:text-yellow-500"
              >
                 Masuk
-             </button>
+             </Link>
 
              <Link href="/register" className="text-center py-2 bg-yellow-500 text-black font-bold rounded-lg">Daftar Gratis</Link>
           </div>

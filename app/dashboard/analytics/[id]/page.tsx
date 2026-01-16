@@ -17,7 +17,6 @@ export default function AnalyticsDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
   const [stats, setStats] = useState({
     avgRating: 0,
     totalReviews: 0,
@@ -54,7 +53,7 @@ export default function AnalyticsDetailPage() {
         if (storeData) {
             setStore(storeData);
 
-            // 2. Ambil Review
+            // 2. Ambil Review (Cuma buat hitung statistik, GAK DITAMPILIN)
             const { data: feedbacks } = await supabase
                 .from("feedbacks")
                 .select("*")
@@ -62,8 +61,6 @@ export default function AnalyticsDetailPage() {
                 .order("created_at", { ascending: false });
 
             if (feedbacks) {
-                setReviews(feedbacks);
-
                 // 3. Hitung Statistik
                 let total = feedbacks.length;
                 let sumRating = 0;
@@ -87,7 +84,7 @@ export default function AnalyticsDetailPage() {
                     starCounts: stars
                 });
 
-                // 4. GENERATE AI INSIGHT (LOGIKA PINTAR) 🧠
+                // 4. GENERATE AI INSIGHT
                 generateSmartInsight(avg, total, happy, sad, storeData.clicks);
             }
         }
@@ -172,7 +169,7 @@ export default function AnalyticsDetailPage() {
                 </div>
             </div>
 
-            {/* --- AI INSIGHT SECTION (INI YANG BARU) --- */}
+            {/* --- AI INSIGHT SECTION --- */}
             <div className={`mb-8 p-1 rounded-[2.2rem] bg-gradient-to-r ${aiInsight.title.includes("Luar Biasa") ? "from-green-500/50 to-blue-500/50" : aiInsight.title.includes("Waspada") ? "from-amber-500/50 to-orange-500/50" : aiInsight.title.includes("Perbaikan") ? "from-red-500/50 to-pink-500/50" : "from-zinc-700 to-zinc-800"}`}>
                 <div className={`bg-gradient-to-br ${aiInsight.color} backdrop-blur-xl rounded-[2rem] p-8 border border-white/10 relative overflow-hidden`}>
                     <div className="absolute top-0 right-0 p-10 opacity-10"><BrainCircuit size={120} className="text-white"/></div>
@@ -195,7 +192,6 @@ export default function AnalyticsDetailPage() {
                     </div>
                 </div>
             </div>
-            {/* ------------------------------------------ */}
 
             {/* TOP STATS CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -217,7 +213,7 @@ export default function AnalyticsDetailPage() {
                 </div>
             </div>
 
-            {/* DETAIL ANALITIK */}
+            {/* DETAIL ANALITIK (GRAFIK BINTANG + SENTIMEN) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div className="md:col-span-2 bg-zinc-900/40 border border-zinc-800 p-8 rounded-[2rem]">
                     <h3 className="text-xl font-bold mb-6">Distribusi Rating</h3>
@@ -253,29 +249,8 @@ export default function AnalyticsDetailPage() {
                 </div>
             </div>
 
-            {/* REVIEW TERKIRIM */}
-            <div>
-                <h3 className="text-xl font-bold mb-6">Review Terkini</h3>
-                {reviews.length === 0 ? (
-                    <div className="text-center py-10 bg-zinc-900/30 border border-dashed border-zinc-800 rounded-2xl text-zinc-500">Belum ada review untuk toko ini.</div>
-                ) : (
-                    <div className="grid gap-4">
-                        {reviews.slice(0, 5).map((rev) => (
-                            <div key={rev.id} className="bg-zinc-900/30 border border-zinc-800 p-5 rounded-2xl flex flex-col md:flex-row gap-4 items-start">
-                                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold ${rev.rating >= 4 ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'}`}>{rev.rating}</div>
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="font-bold text-white text-sm">{rev.customer_name || "Anonim"}</h4>
-                                        <span className="text-zinc-500 text-xs">• {new Date(rev.created_at).toLocaleDateString()}</span>
-                                    </div>
-                                    <p className="text-zinc-300 text-sm">"{rev.comment || "-"}"</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
+            {/* ✅ BAGIAN REVIEW SUDAH DIHAPUS, HALAMAN BERHENTI DI SINI ✅ */}
+            
         </div>
     </div>
   );

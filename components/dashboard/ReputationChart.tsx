@@ -8,7 +8,7 @@ import { Star, TrendingUp, TrendingDown, CalendarDays, Loader2 } from 'lucide-re
 export default function ReputationChart() {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('hari'); // Default hari biar langsung kelihatan zig-zagnya
+  const [filter, setFilter] = useState('hari'); 
   const [chartData, setChartData] = useState<any[]>([]); 
   
   const [stats, setStats] = useState({
@@ -35,12 +35,11 @@ export default function ReputationChart() {
           if (campaigns) campaigns.forEach((c: any) => campaignIds.push(c.id));
 
           if (campaignIds.length > 0) {
-              // Ambil data review
               const { data: feedbacks } = await supabase
                   .from("feedbacks")
                   .select("rating, created_at")
                   .in("campaign_id", campaignIds)
-                  .order("created_at", { ascending: true }); // Urut dari lama ke baru
+                  .order("created_at", { ascending: true });
 
               if (feedbacks) {
                   processChartData(feedbacks, filter);
@@ -53,13 +52,12 @@ export default function ReputationChart() {
       }
   };
 
-  // --- LOGIKA JANTUNG (ZIG-ZAG) ---
+  // --- LOGIKA JANTUNG (ZIG-ZAG) + AUTO FILL ---
   const processChartData = (data: any[], type: string) => {
       let processed: any[] = [];
       const now = new Date();
 
       if (type === 'hari') {
-          // 🔥 MODE RAW (ZIG-ZAG): Tampilkan setiap review sebagai 1 titik
           // Ambil review 24 jam terakhir
           const recentReviews = data.filter((f: any) => {
               const fDate = new Date(f.created_at);
@@ -68,75 +66,89 @@ export default function ReputationChart() {
               return diffHours <= 24; 
           });
 
-          // Petakan langsung: 1 Review = 1 Titik di Grafik
-          // GAK ADA RATA-RATA DISINI. MURNI NILAI BINTANGNYA.
+          // Petakan: 1 Review = 1 Titik
           processed = recentReviews.map((r: any) => {
               const d = new Date(r.created_at);
-              // Format jam:menit (contoh: 19:30)
               const timeLabel = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
               return {
                   name: timeLabel,
-                  rating: r.rating // Langsung nilai bintangnya (1, 5, 3, dst)
+                  rating: r.rating 
               };
           });
 
-          // Kalau data kosong/sedikit, kasih dummy biar gak jelek
+          // 🔥 PERBAIKAN: Kalau data cuma 1 (Titik Doang), bikin titik palsu di awal hari biar jadi garis lurus
+          if (processed.length === 1) {
+              processed.unshift({
+                  name: "00:00",
+                  rating: processed[0].rating // Nilainya sama, jadi garisnya datar (flat)
+              });
+          }
+
+          // Kalau kosong total, kasih default
           if (processed.length === 0) {
-             processed = [{name: '00:00', rating: 0}]; 
+             processed = [{name: '00:00', rating: 0}, {name: '23:59', rating: 0}]; 
           }
 
       } else if (type === 'minggu') {
-          // Mode Minggu: Rata-rata Harian (Agak smooth)
           const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+          // Ambil rating terakhir dari database sebagai nilai awal (carry over)
+          let lastKnownRating = data.length > 0 ? data[data.length - 1].rating : 0;
+
+          // Urutkan data berdasarkan waktu (penting buat carry over)
+          const sortedData = [...data].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
           for (let i = 6; i >= 0; i--) {
               const d = new Date();
               d.setDate(d.getDate() - i);
               const dayName = days[d.getDay()];
 
-              const reviewsInDay = data.filter((f: any) => {
+              const reviewsInDay = sortedData.filter((f: any) => {
                   const fDate = new Date(f.created_at);
                   return fDate.toDateString() === d.toDateString();
               });
 
-              // Kalau hari itu gak ada review, pakai nilai hari sebelumnya (biar garis nyambung)
-              const lastVal = processed.length > 0 ? processed[processed.length-1].rating : 0;
-              
-              const avg = reviewsInDay.length > 0 
-                  ? reviewsInDay.reduce((a:any, b:any) => a + b.rating, 0) / reviewsInDay.length 
-                  : lastVal;
+              // Jika hari ini ada review, hitung rata-ratanya
+              // Jika TIDAK ADA, pakai nilai terakhir (carry over) biar grafiknya nyambung terus
+              if (reviewsInDay.length > 0) {
+                  const sum = reviewsInDay.reduce((a:any, b:any) => a + b.rating, 0);
+                  const avg = sum / reviewsInDay.length;
+                  lastKnownRating = Number(avg.toFixed(1)); // Update nilai terakhir
+              }
 
-              processed.push({ name: dayName, rating: Number(avg.toFixed(1)) });
+              processed.push({ name: dayName, rating: lastKnownRating });
           }
 
       } else if (type === 'bulan') {
-          // Mode Bulan: Rata-rata Mingguan (Smooth banget)
+          // Logika Bulan juga sama, pake carry over
+          let lastKnownRating = data.length > 0 ? data[data.length - 1].rating : 0;
+          const sortedData = [...data].sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
           for (let i = 3; i >= 0; i--) {
               const end = new Date();
               end.setDate(end.getDate() - (i * 7));
               const start = new Date();
               start.setDate(start.getDate() - (i * 7) - 7);
 
-              const reviewsInWeek = data.filter((f: any) => {
+              const reviewsInWeek = sortedData.filter((f: any) => {
                   const fDate = new Date(f.created_at);
                   return fDate >= start && fDate <= end;
               });
 
-              const lastVal = processed.length > 0 ? processed[processed.length-1].rating : 0;
+              if (reviewsInWeek.length > 0) {
+                  const sum = reviewsInWeek.reduce((a:any, b:any) => a + b.rating, 0);
+                  const avg = sum / reviewsInWeek.length;
+                  lastKnownRating = Number(avg.toFixed(1));
+              }
 
-              const avg = reviewsInWeek.length > 0 
-                  ? reviewsInWeek.reduce((a:any, b:any) => a + b.rating, 0) / reviewsInWeek.length 
-                  : lastVal;
-
-              processed.push({ name: `Mg ${4-i}`, rating: Number(avg.toFixed(1)) });
+              processed.push({ name: `Mg ${4-i}`, rating: lastKnownRating });
           }
       }
 
       setChartData(processed);
 
-      // Update Angka Summary di kiri atas
+      // Update Angka Summary
       if (processed.length > 0) {
           const curr = processed[processed.length - 1].rating;
-          // Bandingkan dengan data sebelumnya (kalau ada)
           const prev = processed.length >= 2 ? processed[processed.length - 2].rating : curr;
           setStats({ current: curr, isUp: curr >= prev });
       }
@@ -215,12 +227,11 @@ export default function ReputationChart() {
                         labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
                     />
                     
-                    {/* Domain 0-6 biar grafik 5 gak mentok banget di atap, dan 1 gak mentok di lantai */}
                     <YAxis domain={[0, 6]} hide />
                     <XAxis dataKey="name" hide />
                     
                     <Area 
-                        type="monotone" // Ganti 'step' kalau mau patah-patah banget, 'monotone' agak melengkung dikit
+                        type="monotone" 
                         dataKey="rating" 
                         stroke={stats.isUp ? "#fbbf24" : "#ef4444"} 
                         strokeWidth={2} 
