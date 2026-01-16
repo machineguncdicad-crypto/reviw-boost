@@ -1,87 +1,55 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from 'next/server';
 
-// ❌ DULU DISINI (DIHAPUS BIAR GAK ERROR PAS BUILD)
-
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    // ✅ PINDAH KESINI (SEKARANG AMAN)
-    // Supabase baru dipanggil pas ada request masuk, bukan pas build.
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // 1. Tangkap Data dari Form Review
+    const body = await request.json();
+    const { rating, comment, brand_name, customer_name, phone } = body;
 
-    const notification = await req.json();
+    console.log("🔔 DATA REVIEW MASUK:", body);
 
-    // 1. AMBIL DATA DARI MIDTRANS
-    const orderId = notification.order_id;
-    const transactionStatus = notification.transaction_status;
-    const fraudStatus = notification.fraud_status;
+    // 2. Tentukan Isi Pesan
+    const isHappy = rating >= 4;
+    const emoji = isHappy ? "🎉" : "⚠️";
+    const title = isHappy 
+        ? `Review Bintang ${rating}!` 
+        : `Komplain: Bintang ${rating}`;
+    
+    const messageContent = `
+👤 ${customer_name || 'Anonim'} (${phone || '-'})
+💬 "${comment || 'Tanpa komentar'}"
+    `.trim();
 
-    console.log(`🔔 Notif Masuk: ${orderId} | Status: ${transactionStatus}`);
+    // 3. KIRIM KE ONESIGNAL (The Magic Part 🪄)
+    const options = {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        // Pastikan API Key ini benar (REST API KEY, bukan User Auth Key)
+        Authorization: `Basic ${process.env.ONESIGNAL_REST_API_KEY}`, 
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        app_id: process.env.ONESIGNAL_APP_ID, // ID Aplikasi OneSignal Lu
+        included_segments: ['Total Subscriptions'], // Kirim ke semua Admin yang subscribe
+        headings: { en: title },
+        contents: { en: messageContent },
+        // (Opsional) Biar pas diklik langsung buka dashboard
+        // url: "https://reviewboost.id/dashboard/reviews" 
+      })
+    };
 
-    // 2. TENTUKAN STATUS PEMBAYARAN (Lunas/Gagal)
-    let paymentStatus = "pending";
-    if (transactionStatus == "capture") {
-      if (fraudStatus == "challenge") paymentStatus = "challenge";
-      else if (fraudStatus == "accept") paymentStatus = "paid";
-    } else if (transactionStatus == "settlement") {
-      paymentStatus = "paid"; // <--- INI STATUS YANG KITA CARI (LUNAS)
-    } else if (
-      transactionStatus == "cancel" ||
-      transactionStatus == "deny" ||
-      transactionStatus == "expire"
-    ) {
-      paymentStatus = "failed";
-    }
+    // Tembak API OneSignal
+    const response = await fetch('https://onesignal.com/api/v1/notifications', options);
+    const responseData = await response.json();
 
-    // 3. CARI TRANSAKSI INI PUNYA SIAPA? (Cek tabel transactions)
-    // Kita update dulu status di tabel transactions jadi 'paid'
-    const { data: trxData, error } = await supabaseAdmin
-      .from("transactions")
-      .update({ status: paymentStatus })
-      .eq("order_id", orderId)
-      .select("user_id") // Kita butuh User ID nya
-      .single();
+    console.log("✅ Status Kirim OneSignal:", responseData);
 
-    // Kalau transaksi gak ketemu, stop disini.
-    if (error || !trxData) {
-      console.log("❌ Transaksi tidak ditemukan:", orderId);
-      return NextResponse.json({ message: "Order not found" }, { status: 404 });
-    }
+    return NextResponse.json({ success: true, data: responseData });
 
-    // 🔥 4. BAGIAN UTAMA: AUTO UPGRADE & SET TANGGAL 🔥
-    // Kalau statusnya 'paid' (Lunas), jalankan logika ini:
-    if (paymentStatus === "paid") {
-      
-      // A. HITUNG TANGGAL BERAKHIR (DURASI)
-      const currentDate = new Date();
-      const expiryDate = new Date();
-      
-      // Tambah 30 Hari dari hari ini (Sesuaikan: mau 30, 365, dll)
-      expiryDate.setDate(currentDate.getDate() + 30); 
-
-      // B. UPDATE PROFIL USER (Ubah Pangkat & Tanggal)
-      const { error: upgradeError } = await supabaseAdmin
-        .from("profiles")
-        .update({
-          subscription_plan: "pro", // <--- UBAH JADI PRO/BASIC
-          subscription_end_date: expiryDate.toISOString() // <--- SET TANGGAL HABIS
-        })
-        .eq("id", trxData.user_id); // Target user yang bayar tadi
-        
-      if (upgradeError) {
-        console.error("❌ Gagal Upgrade User:", upgradeError);
-      } else {
-        console.log(`✅ User ${trxData.user_id} BERHASIL DI-UPGRADE SAMPAI ${expiryDate.toISOString()}`);
-      }
-    }
-
-    return NextResponse.json({ status: "OK" });
-
-  } catch (err) {
-    console.error("❌ Error System:", err);
-    return NextResponse.json({ message: "Error" }, { status: 500 });
+  } catch (error) {
+    console.error("🔥 Gagal Kirim Notif:", error);
+    // Kita return true aja biar user gak ngerasa error, padahal notifnya gagal (biar UX tetep mulus)
+    return NextResponse.json({ success: false, error: "Gagal notif" }, { status: 500 });
   }
 }

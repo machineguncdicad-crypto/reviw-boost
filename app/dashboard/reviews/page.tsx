@@ -5,22 +5,21 @@ import { supabase } from "@/lib/supabase";
 import { 
   Star, Search, Filter, Loader2, MessageSquare, 
   Store, MapPin, Calendar, Smartphone, Download, 
-  Lock, X 
+  Lock
 } from "lucide-react";
 import Link from "next/link"; 
+import { useRouter } from "next/navigation"; // 👈 Wajib import ini buat redirect
 
 export default function ReviewsPage() {
+  const router = useRouter(); // 👈 Inisialisasi Router
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [storeNames, setStoreNames] = useState<Record<string, string>>({});
   
-  // 🔥 STATUS PRO & MODAL
+  // 🔥 STATUS PRO
   const [isPro, setIsPro] = useState(false);
-  const [subscriptionDebug, setSubscriptionDebug] = useState("loading..."); // Buat Nampilin di Layar
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-
   const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
@@ -37,15 +36,11 @@ export default function ReviewsPage() {
             .eq("id", user.id)
             .single();
 
-        // SIMPAN STATUS BUAT DITAMPILIN DI LAYAR (DEBUGGING)
-        const status = profileData?.subscription_status || "kosong (free)";
-        setSubscriptionDebug(status);
-
         // LOGIKA PENENTUAN PRO
         if (profileData && (profileData.subscription_status === 'pro' || profileData.subscription_status === 'lifetime')) {
              setIsPro(true);
         } else {
-             setIsPro(false); // Pastikan jadi false kalau bukan pro
+             setIsPro(false);
         }
 
         // --- Ambil Data Toko & Review ---
@@ -76,11 +71,12 @@ export default function ReviewsPage() {
     fetchData();
   }, []);
 
-  // --- HANDLE LOCKED ACTION ---
+  // --- HANDLE LOCKED ACTION (REDIRECT KE PROFIL) ---
   const handleLockedAction = (e?: any) => {
       if (!isPro) {
           if (e) e.preventDefault();
-          setShowUpgradeModal(true);
+          // 👇 UBAH DISINI: Arahkan ke Halaman Profil
+          router.push("/dashboard/profile"); 
           return true; 
       }
       return false; 
@@ -129,18 +125,7 @@ export default function ReviewsPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white p-6 md:p-10 font-sans relative">
       
-      {/* 🔴 ALAT DETEKTIF (KOTAK MERAH) - HAPUS NANTI KALAU UDAH BENER */}
-      <div className="fixed top-24 right-6 z-[100] bg-red-600/90 text-white p-4 rounded-xl border-2 border-yellow-400 shadow-2xl backdrop-blur-md max-w-xs">
-          <h3 className="font-black text-yellow-300 border-b border-white/20 pb-1 mb-2">🕵️ DEBUGGER MODE</h3>
-          <div className="space-y-1 text-xs font-mono">
-              <p>Status di DB: <span className="font-bold bg-black/30 px-1 rounded">{subscriptionDebug}</span></p>
-              <p>Mode Aplikasi: <span className={`font-bold px-1 rounded ${isPro ? "bg-green-500" : "bg-black"}`}>{isPro ? "PRO (UNLOCKED)" : "FREE (LOCKED)"}</span></p>
-              <p>Total Review: {reviews.length}</p>
-          </div>
-          <div className="mt-3 text-[10px] leading-tight opacity-80 italic">
-              *Jika "Status di DB" tulisannya 'pro', ganti dulu di Supabase jadi kosong/free biar kekunci.
-          </div>
-      </div>
+      {/* ✅ SUDAH BERSIH: TIDAK ADA LAGI KOTAK MERAH DEBUGGER */}
 
       {/* HEADER */}
       <div className="max-w-5xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -202,12 +187,15 @@ export default function ReviewsPage() {
                         <p className="text-zinc-500 dark:text-zinc-400 mb-6 leading-relaxed">
                             Upgrade ke PRO untuk melihat komentar, membalas pelanggan, dan export data.
                         </p>
+                        
+                        {/* 👇 TOMBOL INI SEKARANG LARI KE PROFIL 👇 */}
                         <button 
-                            onClick={() => setShowUpgradeModal(true)}
+                            onClick={() => router.push("/dashboard/profile")} 
                             className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3.5 rounded-xl transition transform hover:scale-105 shadow-lg shadow-amber-500/20"
                         >
-                            Buka Akses Review
+                            Buka Akses Review ↗
                         </button>
+
                     </div>
                 </div>
             )}
@@ -256,26 +244,6 @@ export default function ReviewsPage() {
             </div>
         </div>
       </div>
-
-      {/* UPGRADE MODAL */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/50 dark:bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-            <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full max-w-5xl rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] overflow-y-auto">
-                <button onClick={() => setShowUpgradeModal(false)} className="absolute top-6 right-6 p-3 bg-zinc-100 dark:bg-zinc-900 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white z-20 border border-zinc-200 dark:border-zinc-800"><X size={20} /></button>
-                <div className="text-center mb-12 mt-6">
-                    <span className="text-amber-500 text-sm font-bold uppercase tracking-widest mb-2 block">Premium Access</span>
-                    <h2 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white mb-4">Upgrade Bisnismu 🚀</h2>
-                    <p className="text-zinc-500 dark:text-zinc-400 text-lg max-w-2xl mx-auto">Fitur Export Data, Balas WA, dan Konten IG Creator hanya tersedia untuk member PRO.</p>
-                </div>
-                <div className="flex justify-center">
-                    <Link href="/dashboard/pricing" className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-10 py-4 rounded-full text-lg shadow-xl shadow-amber-500/20 transition hover:scale-105">
-                        Lihat Pilihan Paket
-                    </Link>
-                </div>
-            </div>
-        </div>
-      )}
-
     </div>
   );
 }
