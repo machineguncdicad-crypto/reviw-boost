@@ -8,10 +8,10 @@ import {
   Lock
 } from "lucide-react";
 import Link from "next/link"; 
-import { useRouter } from "next/navigation"; // 👈 Wajib import ini buat redirect
+import { useRouter } from "next/navigation";
 
 export default function ReviewsPage() {
-  const router = useRouter(); // 👈 Inisialisasi Router
+  const router = useRouter();
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState("all");
@@ -32,12 +32,18 @@ export default function ReviewsPage() {
         // 🔥 1. CEK STATUS SUBSCRIPTION 🔥
         const { data: profileData } = await supabase
             .from("profiles")
-            .select("id, business_name, subscription_status") 
+            .select("id, business_name, subscription_status, tier_name") 
             .eq("id", user.id)
             .single();
 
-        // LOGIKA PENENTUAN PRO
-        if (profileData && (profileData.subscription_status === 'pro' || profileData.subscription_status === 'lifetime')) {
+        // LOGIKA PENENTUAN PRO (LEBIH LONGGAR)
+        // Kita cek tier_name juga biar aman
+        if (profileData && (
+            profileData.subscription_status === 'pro' || 
+            profileData.subscription_status === 'lifetime' ||
+            profileData.subscription_status === 'active' || // Tambahan buat webhook baru
+            (profileData.tier_name && profileData.tier_name !== 'FREE') // Cek Tier
+        )) {
              setIsPro(true);
         } else {
              setIsPro(false);
@@ -71,12 +77,12 @@ export default function ReviewsPage() {
     fetchData();
   }, []);
 
-  // --- HANDLE LOCKED ACTION (REDIRECT KE PROFIL) ---
+  // --- HANDLE LOCKED ACTION ---
+  // Kalau belum PRO, arahkan ke halaman langganan
   const handleLockedAction = (e?: any) => {
       if (!isPro) {
           if (e) e.preventDefault();
-          // 👇 UBAH DISINI: Arahkan ke Halaman Profil
-          router.push("/dashboard/profile"); 
+          router.push("/dashboard/profile?tab=billing"); // Arahin langsung ke tab billing biar to the point
           return true; 
       }
       return false; 
@@ -125,8 +131,6 @@ export default function ReviewsPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black text-zinc-900 dark:text-white p-6 md:p-10 font-sans relative">
       
-      {/* ✅ SUDAH BERSIH: TIDAK ADA LAGI KOTAK MERAH DEBUGGER */}
-
       {/* HEADER */}
       <div className="max-w-5xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
@@ -146,14 +150,6 @@ export default function ReviewsPage() {
                 {isExporting ? <Loader2 size={20} className="animate-spin"/> : !isPro ? <Lock size={20}/> : <Download size={20}/>}
                 Export CSV
             </button>
-            <Link 
-                href={isPro ? "/dashboard/testimonials" : "#"} 
-                onClick={(e) => handleLockedAction(e)}
-                className={`flex items-center gap-2 font-bold px-5 py-3 rounded-xl transition shadow-lg active:scale-95 ${!isPro ? 'bg-zinc-200 text-zinc-500 cursor-not-allowed' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20'}`}
-            >
-                {!isPro ? <Lock size={20}/> : <Smartphone size={20}/>}
-                Buat Konten IG
-            </Link>
         </div>
       </div>
 
@@ -173,10 +169,10 @@ export default function ReviewsPage() {
             </div>
         </div>
 
-        {/* --- AREA GEMBOK & REVIEW --- */}
+        {/* --- AREA REVIEW (LOGIKA GEMBOK DIPERBAIKI) --- */}
         <div className="relative min-h-[500px]"> 
             
-            {/* 🔥 LAYAR PELINDUNG (GEMBOK) 🔥 */}
+            {/* 🔥 LAYAR PELINDUNG (CUMA MUNCUL KALO BUKAN PRO) 🔥 */}
             {!isPro && reviews.length > 0 && (
                 <div className="absolute inset-0 z-50 backdrop-blur-md bg-white/40 dark:bg-black/40 flex flex-col items-center justify-center rounded-3xl border border-white/10">
                     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 rounded-3xl shadow-2xl text-center max-w-md mx-4 transform scale-100 transition-transform">
@@ -188,9 +184,8 @@ export default function ReviewsPage() {
                             Upgrade ke PRO untuk melihat komentar, membalas pelanggan, dan export data.
                         </p>
                         
-                        {/* 👇 TOMBOL INI SEKARANG LARI KE PROFIL 👇 */}
                         <button 
-                            onClick={() => router.push("/dashboard/profile")} 
+                            onClick={() => router.push("/dashboard/profile?tab=billing")} 
                             className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3.5 rounded-xl transition transform hover:scale-105 shadow-lg shadow-amber-500/20"
                         >
                             Buka Akses Review ↗
@@ -200,7 +195,7 @@ export default function ReviewsPage() {
                 </div>
             )}
 
-            {/* 🔥 LIST REVIEW (EFEK BLUR LEBIH KUAT) 🔥 */}
+            {/* 🔥 LIST REVIEW (KALO PRO, BLUR-NYA HILANG) 🔥 */}
             <div className={`space-y-4 transition-all duration-500 ${!isPro ? "blur-md opacity-40 grayscale pointer-events-none select-none overflow-hidden h-[600px]" : ""}`}>
                 {filteredReviews.length === 0 ? (
                     <div className="text-center py-20 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200 dark:border-zinc-800 border-dashed">
@@ -215,7 +210,7 @@ export default function ReviewsPage() {
                         const dateString = new Date(review.created_at).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' });
 
                         return (
-                            <div key={review.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl shadow-sm">
+                            <div key={review.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 rounded-2xl shadow-sm hover:shadow-md transition">
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                                     <div className="flex items-center gap-4">
                                         <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-lg shrink-0 ${review.rating >= 4 ? "bg-green-500" : "bg-amber-500"}`}>{review.customer_name ? review.customer_name[0].toUpperCase() : "A"}</div>
