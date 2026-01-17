@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Loader2, ArrowRight, Sparkles, Shield, Crown, AlertTriangle } from "lucide-react"; // Tambah Icon
-import Link from "next/link"; // Tambah Link buat navigasi
+import { Loader2, ArrowRight, Sparkles, Shield, Crown, AlertTriangle } from "lucide-react"; 
+import Link from "next/link"; 
 
 export default function CreateStoreFinal() {
   const [isMounted, setIsMounted] = useState(false);
@@ -31,17 +31,23 @@ export default function CreateStoreFinal() {
         if (!user) return;
         setUserId(user.id);
 
-        // A. AMBIL DATA PAKET DARI PROFIL
+        // A. AMBIL DATA TIER (Level) DARI PROFIL
+        // Kita cukup ambil 'tier_name' aja, gak perlu 'limit_campaigns'
         const { data: profile } = await supabase
           .from("profiles")
-          .select("limit_campaigns, tier_name")
+          .select("tier_name")
           .eq("id", user.id)
           .single();
         
-        const limit = profile?.limit_campaigns || 1;
         const tier = profile?.tier_name || "FREE";
-        setMaxLimit(limit);
         setTierName(tier);
+
+        // 🔥 LOGIKA BARU: TENTUKAN LIMIT BERDASARKAN TIER 🔥
+        let calculatedLimit = 1;
+        if (tier === 'PRO') calculatedLimit = 3;          // PRO dapet 3
+        if (tier === 'ENTERPRISE') calculatedLimit = 999; // Sultan dapet Unlimited
+
+        setMaxLimit(calculatedLimit);
 
         // B. HITUNG JUMLAH TOKO YANG SUDAH DIBUAT (DI TABEL CAMPAIGNS)
         const { count } = await supabase
@@ -53,7 +59,7 @@ export default function CreateStoreFinal() {
         setCurrentCount(existing);
 
         // C. BANDINGKAN (KALAU SUDAH MENTOK, BLOKIR)
-        if (existing >= limit) {
+        if (existing >= calculatedLimit) {
             setLimitReached(true);
         }
 
@@ -66,7 +72,7 @@ export default function CreateStoreFinal() {
     checkUserAndLimit();
   }, []);
 
-  // 2. Fungsi Submit (Sekarang Simpan ke 'campaigns' buat Toko Baru)
+  // 2. Fungsi Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -79,14 +85,14 @@ export default function CreateStoreFinal() {
     setLoading(true);
 
     try {
-      // Auto-Generate Slug dari Nama Bisnis
+      // Auto-Generate Slug
       const autoSlug = formData.businessName
         .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-') // Ganti simbol jadi strip
-        .replace(/(^-|-$)+/g, '') +  // Hapus strip di awal/akhir
-        "-" + Math.floor(Math.random() * 1000); // Tambah angka acak biar unik
+        .replace(/[^a-z0-9]+/g, '-') 
+        .replace(/(^-|-$)+/g, '') + 
+        "-" + Math.floor(Math.random() * 1000); 
 
-      // Simpan ke Tabel CAMPAIGNS (Bukan Profiles lagi, biar bisa banyak toko)
+      // Simpan ke Tabel CAMPAIGNS
       const { error } = await supabase
         .from("campaigns")
         .insert({
@@ -111,11 +117,9 @@ export default function CreateStoreFinal() {
   if (!isMounted) return null;
 
   // 🔥 TAMPILAN BLOKIR (KALAU KUOTA HABIS) 🔥
-  // Desainnya menyesuaikan gaya Premium yg lu punya (Black & Amber)
   if (!checkingLimit && limitReached) {
     return (
         <div className="min-h-screen w-full bg-black text-white font-sans flex items-center justify-center relative overflow-hidden px-4">
-            {/* Background Effects (Sama kayak Form) */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
             <div className="absolute top-[-20%] left-0 right-0 mx-auto w-[500px] h-[500px] bg-red-900/20 blur-[120px] rounded-full pointer-events-none"></div>
 
@@ -130,7 +134,6 @@ export default function CreateStoreFinal() {
                     Saat ini Anda sudah memiliki {currentCount} toko.
                 </p>
 
-                {/* Card Upgrade */}
                 <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-2xl mb-8 backdrop-blur-sm">
                     <h3 className="font-bold text-white mb-4 flex items-center justify-center gap-2">
                         <Crown size={18} className="text-amber-500"/> Solusi: Upgrade Paket
@@ -153,17 +156,15 @@ export default function CreateStoreFinal() {
     );
   }
 
-  // 🔥 TAMPILAN FORM (NORMAL) - GAK ADA YG DIUBAH 🔥
+  // 🔥 TAMPILAN FORM (NORMAL) 🔥
   return (
     <div className="min-h-screen w-full bg-black text-white font-sans flex items-center justify-center relative overflow-hidden">
         
-        {/* Background Grid & Light */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
         <div className="absolute top-[-20%] left-0 right-0 mx-auto w-[500px] h-[500px] bg-amber-500/20 blur-[120px] rounded-full pointer-events-none"></div>
 
         <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-700 ease-out px-4">
             
-            {/* Header */}
             <div className="mb-10 text-center">
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[11px] font-bold uppercase tracking-widest text-amber-500 mb-6 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
                     <Sparkles size={12} />
@@ -175,7 +176,6 @@ export default function CreateStoreFinal() {
                 <p className="text-zinc-500">
                     Mulai kumpulkan reputasi bintang 5 sekarang.
                 </p>
-                {/* Info Limit Kecil */}
                 <p className="text-[10px] text-zinc-600 mt-2 font-mono">
                    Kuota Tersedia: <span className="text-green-500 font-bold">{currentCount} / {maxLimit}</span>
                 </p>
@@ -183,7 +183,6 @@ export default function CreateStoreFinal() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 
-                {/* Input Nama */}
                 <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">
                         Nama Bisnis
@@ -198,7 +197,6 @@ export default function CreateStoreFinal() {
                     />
                 </div>
 
-                {/* Input Maps */}
                 <div className="space-y-2">
                     <div className="flex justify-between items-center">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest ml-1">
@@ -218,7 +216,6 @@ export default function CreateStoreFinal() {
 
                 <div className="h-px w-full bg-zinc-800 my-6"></div>
 
-                {/* TOMBOL EMAS (PASTI JALAN) */}
                 <button
                     type="submit"
                     disabled={loading}
