@@ -4,7 +4,7 @@ import Midtrans from "midtrans-client";
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from "@supabase/supabase-js";
 
-// 1. Setup Supabase (Admin Mode biar bisa tulis ke tabel transactions)
+// 1. Setup Admin Client (Buat Nulis ke Database - Pake Service Role)
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -20,50 +20,54 @@ export async function POST(request: Request) {
     try {
         const { plan, price } = await request.json();
 
-        // 2. CEK USERNYA SIAPA? (Wajib Login)
-        // Kita ambil user dari token Auth yang dikirim browser
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-        
-        // Ambil header otorisasi dari request
+        // 🔍 CEK HEADER AUTHORIZATION
         const authHeader = request.headers.get('Authorization');
-        if (authHeader) {
-            // Set session manual biar supabase tau ini user siapa
-            await supabase.auth.setSession({
-                access_token: authHeader.replace('Bearer ', ''),
-                refresh_token: '',
-            });
-        }
         
-        const { data: { user } } = await supabase.auth.getUser();
+        if (!authHeader) {
+            console.log("❌ Gagal: Header Authorization Kosong");
+            return NextResponse.json({ error: "Wajib Login (Token Missing)!" }, { status: 401 });
+        }
 
-        if (!user) {
-            return NextResponse.json({ error: "Wajib Login!" }, { status: 401 });
+        // 🔥 JURUS BARU: BIKIN CLIENT KHUSUS BUAT USER INI 🔥
+        // Kita langsung inject tokennya di konfigurasi awal. Lebih paten.
+        const supabaseUser = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            {
+                global: {
+                    headers: { Authorization: authHeader }, // 👈 Tempel KTP disini
+                },
+            }
+        );
+
+        // Cek Usernya valid gak?
+        const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
+
+        if (userError || !user) {
+            console.log("❌ Gagal: Token Tidak Valid / Expired");
+            return NextResponse.json({ error: "Wajib Login (Session Invalid)!" }, { status: 401 });
         }
 
         // 3. Bikin Order ID unik
         const orderId = `ORDER-${uuidv4()}`;
 
-        // 4. TENTUKAN DURASI (Penting buat Auto-Upgrade)
-        // Kalau paket Lifetime (999), kalau bulanan (1)
+        // 4. TENTUKAN DURASI
         let duration = 1;
         if (plan.toLowerCase().includes('lifetime')) duration = 999;
         if (plan.toLowerCase().includes('year')) duration = 12;
 
-        console.log(`📝 Mencatat Transaksi: ${orderId} untuk User: ${user.id}`);
+        console.log(`📝 Mencatat Transaksi: ${orderId} untuk User: ${user.email}`);
 
-        // 🔥 5. CATAT KE SUPABASE DULU! (INI YANG KEMAREN HILANG) 🔥
+        // 5. CATAT KE SUPABASE (Pake Admin Client biar tembus RLS)
         const { error: insertError } = await supabaseAdmin
             .from('transactions')
             .insert({
-                user_id: user.id,          // PENTING: ID User yang beli
-                order_id: orderId,         // PENTING: Kunci buat dicocokin sama Webhook
+                user_id: user.id,
+                order_id: orderId,
                 amount: price,
-                status: 'pending',         // Status awal
-                plan_type: plan,           // Paket apa? (pro/basic)
-                duration_months: duration, // Berapa lama?
+                status: 'pending',
+                plan_type: plan,
+                duration_months: duration,
                 payment_type: 'midtrans'
             });
 
@@ -75,12 +79,13 @@ export async function POST(request: Request) {
         // 6. Siapkan Parameter Midtrans
         const parameter = {
             transaction_details: {
-                order_id: orderId, // HARUS SAMA DENGAN YANG DI DB
+                order_id: orderId,
                 gross_amount: price
             },
             credit_card: { secure: true },
             customer_details: {
-                email: user.email, // Opsional: Biar di Midtrans ada emailnya
+                email: user.email,
+                first_name: user.user_metadata?.full_name || "Customer",
             },
             item_details: [{
                 id: plan,
@@ -93,7 +98,7 @@ export async function POST(request: Request) {
         // 7. Minta Token Transaksi
         const token = await snap.createTransaction(parameter);
         
-        console.log("✅ Token Midtrans Berhasil:", token);
+        console.log("✅ Token Midtrans Berhasil Dibuat");
         return NextResponse.json(token);
 
     } catch (error: any) {
