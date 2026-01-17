@@ -145,28 +145,32 @@ export default function PublicReviewPage() {
     if (slug) fetchStore();
   }, [slug]);
 
-  // 2. NOTIFIKASI
+  // 🔥 2. NOTIFIKASI (SUDAH DIPERBAIKI) 🔥
+  // Sekarang pake API Route Internal, bukan langsung ke OneSignal
   const sendNotification = async (stars: number, text: string, custName: string) => {
-    const isDanger = stars < minRatingGoogle;
-    const title = isDanger ? `⚠️ FEEDBACK: Bintang ${stars}` : `✅ FEEDBACK: Bintang ${stars}`;
-    const msg = `${custName}: ${text || "Tanpa komentar"}`;
+    // Cari ID Owner (Bisa dari user_id kalo campaign, atau id kalo profile)
+    const targetOwnerId = store.user_id || store.id;
+
+    if (!targetOwnerId) return; // Kalo gak ada ownernya, batalin
 
     try {
-      await fetch('https://onesignal.com/api/v1/notifications', {
+      await fetch('/api/notify', {
         method: 'POST',
-        headers: {
-          accept: 'application/json', 'Content-Type': 'application/json',
-          Authorization: 'Basic os_v2_app_verzmyvutfeu5h4y7syqw3rqgtdzjfl3ujbuxuf4eteajl7x76o66uwnfez2hvo5ugqdorwgm6egkxytbaw5e2fgpk3fgk6oiazvclq',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          app_id: 'a9239662-b499-494e-9f98-fcb10b6e3034',
-          included_segments: ['Total Subscriptions'],
-          headings: { en: title },
-          contents: { en: msg },
-          url: window.location.origin + "/dashboard/reviews"
-        }),
+            owner_id: targetOwnerId, // 👈 PENTING: ID Owner
+            rating: stars,
+            comment: text,
+            brand_name: store.business_name || store.brand_name,
+            customer_name: custName,
+            phone: phone
+        })
       });
-    } catch (e) { console.error(e); }
+      console.log("Notif sent via API!");
+    } catch (e) { 
+        console.error("Gagal kirim notif:", e); 
+        // Gak perlu alert error, biar user tetep hepi
+    }
   };
 
   // 3. RATING
@@ -187,6 +191,7 @@ export default function PublicReviewPage() {
         customer_phone: phone || "-" 
     });
 
+    // Panggil fungsi notifikasi yg baru
     await sendNotification(rating, feedback, name || "Anonim");
 
     setTimeout(() => { 
@@ -244,7 +249,6 @@ export default function PublicReviewPage() {
                         <Star 
                             key={s} 
                             size={42} 
-                            // 👇 DULU SALAH DISINI (weight="fill"), SEKARANG UDAH DIHAPUS
                             className={`cursor-pointer transition hover:scale-125 duration-300 ${rating >= s ? theme.star : "text-zinc-800 fill-zinc-800"}`} 
                             onClick={() => handleRating(s)} 
                             onMouseEnter={() => setRating(s)}

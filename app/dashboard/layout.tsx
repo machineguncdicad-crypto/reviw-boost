@@ -3,10 +3,10 @@
 import Link from "next/link";
 import Image from "next/image"; 
 import { usePathname } from "next/navigation"; 
-import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, ChevronRight, Sparkles, X } from "lucide-react"; // Tambah icon X
+import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, Sparkles, X } from "lucide-react"; 
 import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation"; 
-import { useState } from "react";
+import { useState, useEffect } from "react"; 
 import OneSignalInit from "@/components/MyNotif";
 import ReputationChart from "@/components/dashboard/ReputationChart"; 
 
@@ -14,12 +14,45 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  
-  // 🔥 STATE BARU: BUAT BUKA TUTUP MENU DI HP
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // 🔥 FIX MERAH-MERAH (STEP 4) 🔥
+  useEffect(() => {
+    const initOneSignal = async () => {
+      // 1. Cek Siapa yang Login
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return; 
+
+      // 2. Konek ke OneSignal (Pake jurus 'as any' biar gak merah)
+      if (typeof window !== "undefined") {
+        const w = window as any; // 👈 INI KUNCINYA BRO!
+        
+        w.OneSignal = w.OneSignal || [];
+        w.OneSignal.push(function() {
+          w.OneSignal.init({
+            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
+            safari_web_id: "web.onesignal.auto.xxxxx", 
+            notifyButton: { enable: true }, 
+            allowLocalhostAsSecureOrigin: true,
+          });
+
+          // Login sebagai Owner
+          w.OneSignal.login(user.id);
+          console.log("✅ OneSignal Active for Owner ID:", user.id);
+        });
+      }
+    };
+
+    initOneSignal();
+  }, []);
+  
   const handleLogout = async () => {
     setIsLoggingOut(true);
+    // Logout notif juga (Pake 'as any' lagi)
+    if (typeof window !== "undefined") {
+        const w = window as any;
+        if (w.OneSignal) w.OneSignal.logout();
+    }
     await supabase.auth.signOut();
     router.replace("/"); 
   };
@@ -27,7 +60,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const menuItems = [
     { name: "Ringkasan", href: "/dashboard", icon: LayoutDashboard },
     { name: "Inbox Review", href: "/dashboard/reviews", icon: MessageCircle },
-    // 🔥 MENU BARU: TestiGen Studio 🔥
     { name: "TestiGen Studio", href: "/dashboard/testimonials", icon: Sparkles },
     { name: "Profil Saya", href: "/dashboard/profile", icon: User },
     { name: "Pengaturan", href: "/dashboard/settings", icon: Settings },
@@ -36,7 +68,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-black text-white font-sans selection:bg-yellow-500/30">
       
-      {/* CSS EFEK PETIR (TETAP SAMA) */}
+      {/* CSS EFEK PETIR */}
       <style jsx global>{`
         @keyframes lightning {
           0%, 100% { filter: drop-shadow(0 0 0 transparent) brightness(1); }
@@ -52,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         }
       `}</style>
 
-      {/* 🔥 1. HEADER KHUSUS HP (Cuma muncul di layar kecil) 🔥 */}
+      {/* HEADER HP */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950 border-b border-zinc-800 flex items-center justify-between px-4 z-40">
           <div className="electric-logo w-24">
              <Image src="/reviewboost.png" alt="Logo" width={100} height={30} className="w-full h-auto object-contain"/>
@@ -62,7 +94,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
       </div>
 
-      {/* 🔥 2. OVERLAY GELAP (Muncul pas menu HP dibuka biar fokus) 🔥 */}
+      {/* OVERLAY GELAP */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm"
@@ -70,7 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         />
       )}
 
-      {/* --- SIDEBAR (MODIFIKASI RESPONSIVE) --- */}
+      {/* SIDEBAR */}
       <aside 
         className={`
           fixed inset-y-0 left-0 z-50 w-72 bg-zinc-950 border-r border-zinc-800 flex flex-col h-screen 
@@ -79,8 +111,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           md:translate-x-0 md:static md:shrink-0
         `}
       >
-        
-        {/* TOMBOL CLOSE (Khusus HP) */}
         <button 
            onClick={() => setIsMobileMenuOpen(false)} 
            className="absolute top-4 right-4 md:hidden text-zinc-400 hover:text-white p-2"
@@ -88,7 +118,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
            <X size={20} />
         </button>
 
-        {/* LOGO AREA */}
         <div className="p-6 pb-2 flex justify-center">
            <div className="electric-logo cursor-pointer relative w-full max-w-[160px]">
              <Image 
@@ -102,12 +131,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
            </div>
         </div>
 
-        {/* --- AREA GRAFIK REPUTASI --- */}
         <div className="px-4 mb-2 transform scale-90 origin-top">
             <ReputationChart />
         </div>
         
-        {/* NAVIGASI */}
         <div className="flex-1 px-3 space-y-1 overflow-y-auto py-2 custom-scrollbar">
           {menuItems.map((item) => {
             const isActive = pathname === item.href;
@@ -115,7 +142,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link 
                 key={item.href}
                 href={item.href} 
-                onClick={() => setIsMobileMenuOpen(false)} // Tutup menu pas diklik (di HP)
+                onClick={() => setIsMobileMenuOpen(false)} 
                 className={`group flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                   isActive 
                     ? "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20" 
@@ -132,7 +159,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </div>
 
-        {/* PROFILE BOTTOM */}
         <div className="p-4 border-t border-zinc-900 mt-auto">
            <button 
              onClick={handleLogout} 
@@ -147,13 +173,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* --- KONTEN UTAMA --- */}
-      <main className="flex-1 relative h-screen overflow-y-auto bg-black pt-16 md:pt-0"> {/* Tambah padding top di HP biar ga ketutup header */}
-        {/* Background Grid */}
+      {/* KONTEN UTAMA */}
+      <main className="flex-1 relative h-screen overflow-y-auto bg-black pt-16 md:pt-0"> 
         <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none fixed"></div>
-        
         <OneSignalInit />
-
         <div className="relative z-10 p-0">
             {children} 
         </div>
