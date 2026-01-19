@@ -5,7 +5,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 KUNCI BARU LU (Fix Banget)
+    // 👇 INI KUNCI BARU LU (JANGAN DIUBAH, UDAH BENER)
     const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxiei4kgxftevaekieuxhqabprbsaj5ws4lfwbumex43mpohxzrnpkd7c7xnmotif36xuaqbhftr6rhbzq"; 
     
     // APP ID REVIEWBOOST LIVE
@@ -21,24 +21,20 @@ export async function POST(request: Request) {
     const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
 💬 "${comment || 'Tidak ada komentar'}"`;
 
-    // DETEKSI: Kalau ID panjang (>30 char), itu pasti Player ID (HP)
     const isPlayerId = owner_id && owner_id.length > 30;
 
     const options = {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // 👇 WAJIB 'Bearer' KARENA KUNCI 'os_v2...'
-        Authorization: `Bearer ${API_KEY}`, 
+        // 👇 PERHATIKAN: GANTI 'Bearer' JADI 'Key' (SPASI) KODE
+        Authorization: `Key ${API_KEY}`, 
         'content-type': 'application/json'
       },
       body: JSON.stringify({
         app_id: APP_ID,
-        // 👇 LOGIKA PINTAR:
-        // Kirim ke 'player_ids' kalau itu ID HP, kirim ke 'external_user_ids' kalau ID database
         include_player_ids: isPlayerId ? [owner_id] : [],
         include_external_user_ids: !isPlayerId ? [owner_id] : [],
-        
         headings: { en: title },
         contents: { en: messageContent }
       })
