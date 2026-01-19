@@ -5,10 +5,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 INI KUNCI SAKTI YANG BARUSAN MUNCUL DI LAYAR LU
+    // KUNCI BARU (PANJANG)
     const API_KEY = "os_v2_app_asr7serztbeo3gbmkdluvuixeje7t2e3m24ruuomhhzsorkwd4ynnxyfxh4srmci5itrcjoyczcmsv4xnodl7guy41qxe24633cqivty"; 
     
-    // 👇 INI APP ID BARU (REVIEWBOOST LIVE)
+    // APP ID
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
     console.log("🔔 KIRIM NOTIF KE:", owner_id);
@@ -25,8 +25,8 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // Kita coba pakai Basic dulu sesuai standar
-        Authorization: `Basic ${API_KEY}`, 
+        // 👇 INI PERUBAHANNYA: GANTI 'Basic' JADI 'Bearer'
+        Authorization: `Bearer ${API_KEY}`, 
         'content-type': 'application/json'
       },
       body: JSON.stringify({
