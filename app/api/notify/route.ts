@@ -5,10 +5,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 1. API KEY (KUNCI): Pake Kunci Organisasi dari Popup (SAMA)
-    const API_KEY = "os_v2_org_sndpmm7zbfghzitkbm53m4pdxbcoikbydxpespmohp4tklhi3q3nxlnlqlfddvzwi2uauneojzefvggbmdsas2vsjpua77x4d2fexwy"; 
+    // 👇 KUNCI DARI BARIS "VERCEL KEY" DI FOTO LU (UDAH GW SALIN LENGKAP)
+    const API_KEY = "7t2e3m24ruuomhhzsorkwd4ynnxyfxh4srmci5itrcjoyczcmsv4xnodl7guy41qxe24633cqivty"; 
     
-    // 👇 2. APP ID (ALAMAT): Tetep Pake App ID ReviewBoost (JANGAN PAKE ORG ID)
+    // APP ID REVIEWBOOST LIVE
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
     console.log("🔔 NOTIF OTW KE:", owner_id);
@@ -21,22 +21,25 @@ export async function POST(request: Request) {
     const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
 💬 "${comment || 'Tidak ada komentar'}"`;
 
-    // Deteksi apakah ID-nya ID HP (Player ID) atau ID Database
+    // DETEKSI JENIS ID: Jika panjangnya > 30 karakter, itu pasti Player ID (HP)
     const isPlayerId = owner_id && owner_id.length > 30;
 
     const options = {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // 👇 3. HEADER: Wajib Bearer karena kuncinya 'os_v2...'
-        Authorization: `Bearer ${API_KEY}`, 
+        // 👇 WAJIB 'Basic' UNTUK KUNCI TIPE INI
+        Authorization: `Basic ${API_KEY}`, 
         'content-type': 'application/json'
       },
       body: JSON.stringify({
         app_id: APP_ID,
-        // Kirim ke jalur yang tepat sesuai jenis ID
+        // 👇 LOGIKA PENGIRIMAN PINTAR:
+        // Masukkan ke 'include_player_ids' kalau formatnya UUID (HP)
+        // Masukkan ke 'include_external_user_ids' kalau formatnya ID Database
         include_player_ids: isPlayerId ? [owner_id] : [],
         include_external_user_ids: !isPlayerId ? [owner_id] : [],
+        
         headings: { en: title },
         contents: { en: messageContent }
       })
@@ -46,6 +49,11 @@ export async function POST(request: Request) {
     const responseData = await response.json();
 
     console.log("✅ STATUS:", responseData);
+    
+    if (responseData.errors) {
+        return NextResponse.json({ success: false, error: responseData.errors }, { status: 400 });
+    }
+
     return NextResponse.json({ success: true, data: responseData });
 
   } catch (error: any) {
