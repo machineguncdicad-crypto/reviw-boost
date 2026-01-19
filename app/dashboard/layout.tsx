@@ -7,7 +7,8 @@ import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, Sparkles,
 import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation"; 
 import { useState, useEffect } from "react"; 
-import OneSignalInit from "@/components/MyNotif";
+// ❌ HAPUS INI BIAR GAK BENTROK
+// import OneSignalInit from "@/components/MyNotif";
 import ReputationChart from "@/components/dashboard/ReputationChart"; 
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -16,27 +17,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 🔥 FIX ONE SIGNAL (VERSI FINAL) 🔥
+  // 🔥 FIX ONE SIGNAL (VERSI FINAL - INI YANG DIPAKE) 🔥
   useEffect(() => {
     const initOneSignal = async () => {
       // 1. Cek Siapa yang Login
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return; 
 
-      // 2. Konek ke OneSignal (Pake jurus 'as any' biar gak merah)
+      // 2. Konek ke OneSignal
       if (typeof window !== "undefined") {
-        const w = window as any; // 👈 INI KUNCINYA BRO!
+        const w = window as any;
         
         w.OneSignal = w.OneSignal || [];
         w.OneSignal.push(function() {
           w.OneSignal.init({
-            // 👇 INI ID BARU DARI DASHBOARD LU (REVIEWBOOST LIVE)
+            // 👇 APP ID (HARUS SAMA DENGAN ROUTE.TS) - INI UDAH BENER
             appId: "04a3fe92-3998-48ed-982c-50d74ad2e822", 
             notifyButton: { enable: true }, 
             allowLocalhostAsSecureOrigin: true,
           });
 
-          // Login sebagai Owner
+          // Login sebagai Owner biar notifnya nyampe ke orang yang tepat
           w.OneSignal.login(user.id);
           console.log("✅ OneSignal Active for Owner ID:", user.id);
         });
@@ -48,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   const handleLogout = async () => {
     setIsLoggingOut(true);
-    // Logout notif juga (Pake 'as any' lagi)
+    // Logout notif juga
     if (typeof window !== "undefined") {
         const w = window as any;
         if (w.OneSignal) w.OneSignal.logout();
@@ -176,7 +177,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* KONTEN UTAMA */}
       <main className="flex-1 relative h-screen overflow-y-auto bg-black pt-16 md:pt-0"> 
         <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none fixed"></div>
-        <OneSignalInit />
+        
+        {/* ❌ HAPUS INI JUGA BIAR GAK DOUBLE INIT */}
+        {/* <OneSignalInit /> */}
+        
         <div className="relative z-10 p-0">
             {children} 
         </div>
