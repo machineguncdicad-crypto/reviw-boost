@@ -5,13 +5,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // KUNCI BARU (PANJANG)
-    const API_KEY = "os_v2_app_asr7serztbeo3gbmkdluvuixeje7t2e3m24ruuomhhzsorkwd4ynnxyfxh4srmci5itrcjoyczcmsv4xnodl7guy41qxe24633cqivty"; 
+    // 👇 INI KUNCI SAKTI ORGANISASI LU
+    const API_KEY = "os_v2_org_sndpmm7zbfghzitkbm53m4pdxbcoikbydxpespmohp4tklhi3q3nxlnlqlfddvzwi2uauneojzefvggbmdsas2vsjpua77x4d2fexwy"; 
     
-    // APP ID
+    // 👇 APP ID (REVIEWBOOST LIVE)
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
-    console.log("🔔 KIRIM NOTIF KE:", owner_id);
+    console.log("🔔 NOTIF OTW KE:", owner_id);
 
     const isHappy = rating >= 4;
     const title = isHappy 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // 👇 INI PERUBAHANNYA: GANTI 'Basic' JADI 'Bearer'
+        // 👇 KARENA KUNCI 'os_v2...', WAJIB PAKE 'Bearer'
         Authorization: `Bearer ${API_KEY}`, 
         'content-type': 'application/json'
       },
