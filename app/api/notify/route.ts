@@ -5,14 +5,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    console.log("🔔 REQUEST NOTIF MASUK:", body);
-
-    // 👇 KITA PAKE KUNCI "LEGACY" (YANG PALING ATAS DI LIST)
-    // Biasanya cuma ini yang sakti buat kirim notif
-    const API_KEY = "mfmucbohkulxfnxzsv44scbwa"; 
+    // 👇 INI KUNCI SAKTI YANG BARUSAN MUNCUL DI LAYAR LU
+    const API_KEY = "os_v2_app_asr7serztbeo3gbmkdluvuixeje7t2e3m24ruuomhhzsorkwd4ynnxyfxh4srmci5itrcjoyczcmsv4xnodl7guy41qxe24633cqivty"; 
     
-    // App ID tetep sama
-    const APP_ID = "a9239662-b499-494e-9f98-fcb10b6e3034";
+    // 👇 INI APP ID BARU (REVIEWBOOST LIVE)
+    const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
+
+    console.log("🔔 KIRIM NOTIF KE:", owner_id);
 
     const isHappy = rating >= 4;
     const title = isHappy 
@@ -26,6 +25,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
+        // Kita coba pakai Basic dulu sesuai standar
         Authorization: `Basic ${API_KEY}`, 
         'content-type': 'application/json'
       },
@@ -33,17 +33,14 @@ export async function POST(request: Request) {
         app_id: APP_ID,
         include_external_user_ids: [owner_id], 
         headings: { en: title },
-        contents: { en: messageContent },
-        android_channel_id: "e34b978d-672c-4266-932f-435555555555", 
-        priority: 10
+        contents: { en: messageContent }
       })
     };
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', options);
     const responseData = await response.json();
 
-    console.log("✅ STATUS PENGIRIMAN:", responseData);
-
+    console.log("✅ STATUS:", responseData);
     return NextResponse.json({ success: true, data: responseData });
 
   } catch (error: any) {

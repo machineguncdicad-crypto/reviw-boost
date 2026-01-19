@@ -16,7 +16,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 🔥 FIX MERAH-MERAH (STEP 4) 🔥
+  // 🔥 FIX ONE SIGNAL (VERSI FINAL) 🔥
   useEffect(() => {
     const initOneSignal = async () => {
       // 1. Cek Siapa yang Login
@@ -30,8 +30,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         w.OneSignal = w.OneSignal || [];
         w.OneSignal.push(function() {
           w.OneSignal.init({
-            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID,
-            safari_web_id: "web.onesignal.auto.xxxxx", 
+            // 👇 INI ID BARU DARI DASHBOARD LU (REVIEWBOOST LIVE)
+            appId: "04a3fe92-3998-48ed-982c-50d74ad2e822", 
             notifyButton: { enable: true }, 
             allowLocalhostAsSecureOrigin: true,
           });
