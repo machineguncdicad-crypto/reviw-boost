@@ -5,10 +5,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 INI KUNCI SAKTI ORGANISASI LU
-    const API_KEY = "os_v2_org_sndpmm7zbfghzitkbm53m4pdxbcoikbydxpespmohp4tklhi3q3nxlnlqlfddvzwi2uauneojzefvggbmdsas2vsjpua77x4d2fexwy"; 
+    // 👇 KUNCI BARU LU (DARI DASHBOARD APP)
+    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxieiisz5apukpe7r4kgrvd4yspgk2tiqax4hibfme35kbu4oh5oymgj4k7qv6yswc2scfnaoauefjkfei"; 
     
-    // 👇 APP ID (REVIEWBOOST LIVE)
+    // APP ID (ReviewBoost Live)
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
     console.log("🔔 NOTIF OTW KE:", owner_id);
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // 👇 KARENA KUNCI 'os_v2...', WAJIB PAKE 'Bearer'
+        // 👇 PERHATIKAN: PAKE 'Bearer' KARENA KUNCI 'os_v2...'
         Authorization: `Bearer ${API_KEY}`, 
         'content-type': 'application/json'
       },
