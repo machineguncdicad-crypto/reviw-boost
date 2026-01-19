@@ -7,11 +7,11 @@ export async function POST(request: Request) {
 
     console.log("🔔 REQUEST NOTIF MASUK:", body);
 
-    // 👇 KITA TULIS LANGSUNG KUNCINYA DI SINI (JANGAN PAKE PROCESS.ENV DULU)
-    // Ini kunci dari screenshot lu yang "Kunci Vercel Baru"
-    const API_KEY = "5naqf2dpeeaz4367m2v25yh52"; 
+    // 👇 KITA PAKE KUNCI "LEGACY" (YANG PALING ATAS DI LIST)
+    // Biasanya cuma ini yang sakti buat kirim notif
+    const API_KEY = "mfmucbohkulxfnxzsv44scbwa"; 
     
-    // Ini App ID lu dari screenshot sebelumnya
+    // App ID tetep sama
     const APP_ID = "a9239662-b499-494e-9f98-fcb10b6e3034";
 
     const isHappy = rating >= 4;
@@ -26,7 +26,6 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // Pastikan ada spasi setelah Basic
         Authorization: `Basic ${API_KEY}`, 
         'content-type': 'application/json'
       },
