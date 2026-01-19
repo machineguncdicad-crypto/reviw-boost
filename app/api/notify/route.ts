@@ -5,8 +5,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 INI KUNCI BARU LU (JANGAN DIUBAH, UDAH BENER)
-    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxiei4kgxftevaekieuxhqabprbsaj5ws4lfwbumex43mpohxzrnpkd7c7xnmotif36xuaqbhftr6rhbzq"; 
+    // 👇 INI KUNCI BARU HASIL ROTATE (PANJANG & VALID)
+    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxiej7t2e3m24ruuomhhzsorkwd4ynircxq7qngf6mrpj2rmvajsbajxrcbzevvwxc5vijbm4p35hxavgi"; 
     
     // APP ID REVIEWBOOST LIVE
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
@@ -27,7 +27,8 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         accept: 'application/json',
-        // 👇 PERHATIKAN: GANTI 'Bearer' JADI 'Key' (SPASI) KODE
+        // 👇 PERHATIKAN: PAKE 'Key' (BUKAN Basic/Bearer)
+        // Ini pasangan wajib buat kunci 'os_v2'
         Authorization: `Key ${API_KEY}`, 
         'content-type': 'application/json'
       },
