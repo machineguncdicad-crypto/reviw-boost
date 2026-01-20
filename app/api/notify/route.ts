@@ -1,34 +1,19 @@
 import { NextResponse } from 'next/server';
+import https from 'https'; // 👈 KITA PAKE PUSAKA DARI SCRIPT LAPTOP
 
 export async function POST(request: Request) {
   try {
-    console.log("⏰ [DYNAMIC] REQUEST MASUK: " + new Date().toISOString());
-
     const body = await request.json();
-    const { rating, comment, brand_name, customer_name, phone, owner_id } = body; // <--- INI YG PENTING
+    const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
     const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
-    // 🕵️‍♂️ CCTV DATA: KITA CEK APAKAH ID PEMILIK ADA?
-    console.log("=================================");
-    console.log("👤 Customer:", customer_name);
-    console.log("🏢 Brand:", brand_name);
-    console.log("🆔 OWNER ID (TARGET):", owner_id); // <--- Liat ini di log nanti!
-    console.log("=================================");
+    // 👇 KUNCI SAKTI (HARDCODE AJA BIAR AMAN)
+    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxielkngps2un7ek2f2hyy3vm2wvka74u22ixxguulv7beijnupnqnliegy3xu4bt3dldzjrytqhvz6xwq";
 
-    // 🛑 VALIDASI: KALAU OWNER ID KOSONG, JANGAN KIRIM KE ONESIGNAL
-    if (!owner_id) {
-        console.error("❌ GAGAL: Owner ID tidak dikirim oleh Frontend!");
-        // Kita return sukses palsu biar user gak liat error, tapi kita catat di log
-        return NextResponse.json({ success: false, message: "Owner ID missing" }, { status: 200 });
-    }
+    console.log("🚀 [HTTPS NATIVE] MULAI REQUEST...");
+    console.log("🎯 TARGET:", owner_id);
 
-    // 🛠️ HEADER KHUSUS KUNCI V2 (YANG UDAH TERBUKTI SUKSES)
-    const headers = {
-      'accept': 'application/json',
-      'content-type': 'application/json',
-      'Authorization': 'Key os_v2_app_asr75erztbeo3gbmkdluvuxielkngps2un7ek2f2hyy3vm2wvka74u22ixxguulv7beijnupnqnliegy3xu4bt3dldzjrytqhvz6xwq'
-    };
-
+    // LOGIKA TITLE & MESSAGE
     const isHappy = rating >= 4;
     const title = isHappy 
         ? `⭐ Review Bintang ${rating} di ${brand_name}!` 
@@ -37,36 +22,65 @@ export async function POST(request: Request) {
     const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
 💬 "${comment || 'Tidak ada komentar'}"`;
 
-    const options = {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        app_id: APP_ID,
-        // 👇 KITA KIRIM KE ID DINAMIS (SESUAI PEMILIK TOKO)
-        include_aliases: { 
-            external_id: [owner_id] 
-        },
-        target_channel: "push",
-        headings: { en: title },
-        contents: { en: messageContent }
-      })
-    };
+    // DATA YANG MAU DIKIRIM
+    const payload = JSON.stringify({
+      app_id: APP_ID,
+      include_aliases: { external_id: [owner_id || "fca17d83-3410-49b2-b2b6-4348e78fc7cd"] }, // Fallback ke ID Laptop kalo kosong
+      target_channel: "push",
+      headings: { en: title },
+      contents: { en: messageContent }
+    });
 
-    const response = await fetch('https://api.onesignal.com/notifications', options);
-    const responseData = await response.json();
+    // 👇 INI BAGIAN PENTING: KITA GAK PAKE FETCH, KITA PAKE HTTPS.REQUEST
+    // (PERSIS KAYAK SCRIPT TEST_TEMBAK.JS YANG SUKSES)
+    const responseData = await new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.onesignal.com',
+        path: '/notifications',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Key ${API_KEY}` // Header ini terbukti sakti di https module
+        }
+      };
 
-    console.log("✅ STATUS ONE SIGNAL:", response.status);
-    
-    // Kalau error, kita log detailnya
-    if (response.status !== 200) {
-        console.error("📄 ERROR DETAIL:", JSON.stringify(responseData));
-        return NextResponse.json({ success: false, error: responseData }, { status: 400 });
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+             // Coba parse JSON, kalau bukan JSON balikin text asli
+            const parsed = JSON.parse(data);
+            resolve({ status: res.statusCode, body: parsed });
+          } catch (e) {
+            resolve({ status: res.statusCode, body: data });
+          }
+        });
+      });
+
+      req.on('error', (e) => {
+        reject(e);
+      });
+
+      req.write(payload);
+      req.end();
+    });
+
+    // @ts-ignore
+    const { status, body: resultBody } = responseData;
+
+    console.log("✅ STATUS HTTPS:", status);
+    console.log("📄 RESPON HTTPS:", JSON.stringify(resultBody));
+
+    if (status !== 200) {
+        return NextResponse.json({ success: false, error: resultBody }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true, data: responseData });
+    return NextResponse.json({ success: true, data: resultBody });
 
   } catch (error: any) {
-    console.error("❌ CRASH:", error);
+    console.error("❌ CRASH HTTPS:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
