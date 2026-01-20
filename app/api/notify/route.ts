@@ -1,19 +1,18 @@
 import { NextResponse } from 'next/server';
-import https from 'https'; // 👈 KITA PAKE PUSAKA DARI SCRIPT LAPTOP
+import axios from 'axios'; // 👈 KITA PAKE KURIR BARU
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
-    const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
-    // 👇 KUNCI SAKTI (HARDCODE AJA BIAR AMAN)
-    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxielkngps2un7ek2f2hyy3vm2wvka74u22ixxguulv7beijnupnqnliegy3xu4bt3dldzjrytqhvz6xwq";
+    // 👇 PAKE DATA DARI APP BARU (ReviewBoost V2)
+    const APP_ID = "72b814c6-9bef-42b8-9fd6-1778f59e6537";
+    // 👇 PAKE KUNCI V2 YANG LU DAPET BARUSAN
+    const API_KEY = "os_v2_app_ok4bjru355blrh6wc54plhtfg6wvuwafa5buikvdpnmookgdqnft72yfvulx7dm6fjf2mdy6v3s7lusdppcnap4ovtej4kuwq7wwr5a";
 
-    console.log("🚀 [HTTPS NATIVE] MULAI REQUEST...");
-    console.log("🎯 TARGET:", owner_id);
+    console.log("🚀 [AXIOS] KIRIM NOTIF PAKE APP BARU...");
 
-    // LOGIKA TITLE & MESSAGE
     const isHappy = rating >= 4;
     const title = isHappy 
         ? `⭐ Review Bintang ${rating} di ${brand_name}!` 
@@ -22,65 +21,41 @@ export async function POST(request: Request) {
     const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
 💬 "${comment || 'Tidak ada komentar'}"`;
 
-    // DATA YANG MAU DIKIRIM
-    const payload = JSON.stringify({
+    // 📦 PAKET DATA
+    const payload = {
       app_id: APP_ID,
-      include_aliases: { external_id: [owner_id || "fca17d83-3410-49b2-b2b6-4348e78fc7cd"] }, // Fallback ke ID Laptop kalo kosong
+      // ⚠️ PERHATIAN: ID Laptop lu (fca17...) ITU PUNYA APP LAMA.
+      // Di App Baru, ID lu bakal beda.
+      // Buat tes nembus 403 dulu, kita pake 'included_segments' biar nyebar ke semua user di App Baru
+      included_segments: ["Total Subscriptions"], 
       target_channel: "push",
       headings: { en: title },
       contents: { en: messageContent }
-    });
+    };
 
-    // 👇 INI BAGIAN PENTING: KITA GAK PAKE FETCH, KITA PAKE HTTPS.REQUEST
-    // (PERSIS KAYAK SCRIPT TEST_TEMBAK.JS YANG SUKSES)
-    const responseData = await new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.onesignal.com',
-        path: '/notifications',
-        method: 'POST',
+    // 🔫 TEMBAK PAKE AXIOS (Header 'Key' bakal dijaga ketat)
+    const response = await axios.post(
+      'https://api.onesignal.com/notifications',
+      payload,
+      {
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Key ${API_KEY}` // Header ini terbukti sakti di https module
+          'Authorization': `Key ${API_KEY}` // Header V2
         }
-      };
+      }
+    );
 
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => data += chunk);
-        res.on('end', () => {
-          try {
-             // Coba parse JSON, kalau bukan JSON balikin text asli
-            const parsed = JSON.parse(data);
-            resolve({ status: res.statusCode, body: parsed });
-          } catch (e) {
-            resolve({ status: res.statusCode, body: data });
-          }
-        });
-      });
+    console.log("✅ STATUS AXIOS:", response.status);
+    console.log("📄 DATA:", JSON.stringify(response.data));
 
-      req.on('error', (e) => {
-        reject(e);
-      });
-
-      req.write(payload);
-      req.end();
-    });
-
-    // @ts-ignore
-    const { status, body: resultBody } = responseData;
-
-    console.log("✅ STATUS HTTPS:", status);
-    console.log("📄 RESPON HTTPS:", JSON.stringify(resultBody));
-
-    if (status !== 200) {
-        return NextResponse.json({ success: false, error: resultBody }, { status: 400 });
-    }
-
-    return NextResponse.json({ success: true, data: resultBody });
+    return NextResponse.json({ success: true, data: response.data });
 
   } catch (error: any) {
-    console.error("❌ CRASH HTTPS:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    // Kalau Axios Error, kita bongkar isinya
+    const status = error.response?.status || 500;
+    const data = error.response?.data || error.message;
+    
+    console.error("❌ AXIOS ERROR:", status, JSON.stringify(data));
+    return NextResponse.json({ success: false, error: data }, { status: status });
   }
 }

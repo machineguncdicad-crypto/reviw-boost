@@ -7,8 +7,6 @@ import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, Sparkles,
 import { supabase } from "@/lib/supabase"; 
 import { useRouter } from "next/navigation"; 
 import { useState, useEffect } from "react"; 
-// ❌ HAPUS INI BIAR GAK BENTROK
-// import OneSignalInit from "@/components/MyNotif";
 import ReputationChart from "@/components/dashboard/ReputationChart"; 
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 🔥 FIX ONE SIGNAL (VERSI FINAL - INI YANG DIPAKE) 🔥
+  // 🔥 FIX ONE SIGNAL (APP BARU - ReviewBoost V2) 🔥
   useEffect(() => {
     const initOneSignal = async () => {
       // 1. Cek Siapa yang Login
@@ -31,15 +29,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         w.OneSignal = w.OneSignal || [];
         w.OneSignal.push(function() {
           w.OneSignal.init({
-            // 👇 APP ID (HARUS SAMA DENGAN ROUTE.TS) - INI UDAH BENER
-            appId: "04a3fe92-3998-48ed-982c-50d74ad2e822", 
+            // 👇 APP ID BARU (SAMA DENGAN BACKEND AXIOS)
+            appId: "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
             notifyButton: { enable: true }, 
             allowLocalhostAsSecureOrigin: true,
           });
 
           // Login sebagai Owner biar notifnya nyampe ke orang yang tepat
+          // (Ini penting buat targeting di masa depan)
           w.OneSignal.login(user.id);
-          console.log("✅ OneSignal Active for Owner ID:", user.id);
+          console.log("✅ OneSignal V2 Active for Owner ID:", user.id);
         });
       }
     };
@@ -177,9 +176,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* KONTEN UTAMA */}
       <main className="flex-1 relative h-screen overflow-y-auto bg-black pt-16 md:pt-0"> 
         <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none fixed"></div>
-        
-        {/* ❌ HAPUS INI JUGA BIAR GAK DOUBLE INIT */}
-        {/* <OneSignalInit /> */}
         
         <div className="relative z-10 p-0">
             {children} 
