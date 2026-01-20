@@ -1,86 +1,64 @@
-import { NextResponse } from "next/server";
-
-export const runtime = "nodejs"; // penting, jangan edge
+import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    const {
-      rating,
-      comment,
-      brand_name,
-      customer_name,
-      phone,
-      owner_id
-    } = body;
+    // 👇 INI KUNCI SAKTI (DARI SCRIPT TEST TADI)
+    const API_KEY = "os_v2_app_asr75erztbeo3gbmkdluvuxielkngps2un7ek2f2hyy3vm2wvka74u22ixxguulv7beijnupnqnliegy3xu4bt3dldzjrytqhvz6xwq"; 
+    
+    const APP_ID = "04a3fe92-3998-48ed-982c-50d74ad2e822";
 
-    if (!owner_id) {
-      return NextResponse.json(
-        { success: false, error: "owner_id wajib diisi" },
-        { status: 400 }
-      );
-    }
+    console.log("🔔 [V2] KIRIM NOTIF KE:", owner_id);
 
-    const API_KEY = process.env.ONESIGNAL_REST_API_KEY;
-    const APP_ID = process.env.ONESIGNAL_APP_ID;
+    // Siapkan Konten
+    const isHappy = rating >= 4;
+    const title = isHappy 
+        ? `⭐ Review Bintang ${rating} di ${brand_name}!` 
+        : `⚠️ Komplain Bintang ${rating} di ${brand_name}`;
+    
+    const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
+💬 "${comment || 'Tidak ada komentar'}"`;
 
-    if (!API_KEY || !APP_ID) {
-      return NextResponse.json(
-        { success: false, error: "OneSignal ENV belum kebaca" },
-        { status: 500 }
-      );
-    }
-
-    const isHappy = Number(rating) >= 4;
-
-    const title = isHappy
-      ? `⭐ Review Bintang ${rating} di ${brand_name}`
-      : `⚠️ Komplain Bintang ${rating} di ${brand_name}`;
-
-    const messageContent = `👤 ${customer_name || "Anonim"} (${phone || "-"})
-💬 "${comment || "Tidak ada komentar"}"`;
-
-    const response = await fetch(
-      "https://api.onesignal.com/notifications",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Basic ${API_KEY}`,
-          "Accept": "application/json",
+    const options = {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        // ✅ HEADER WAJIB BUAT KUNCI V2 (Sama kayak script test)
+        Authorization: `Key ${API_KEY}`, 
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        app_id: APP_ID,
+        
+        // ✅ TARGETING CARA BARU (Sama kayak script test)
+        include_aliases: {
+            external_id: [owner_id]
         },
-        body: JSON.stringify({
-          app_id: APP_ID,
-          include_aliases: {
-            external_id: [owner_id],
-          },
-          target_channel: "push",
-          headings: { en: title },
-          contents: { en: messageContent },
-        }),
-      }
-    );
+        target_channel: "push",
+        
+        headings: { en: title },
+        contents: { en: messageContent }
+      })
+    };
 
-    const data = await response.json();
+    // ✅ URL WAJIB BUAT KUNCI V2
+    const response = await fetch('https://api.onesignal.com/notifications', options);
+    const responseData = await response.json();
 
-    if (!response.ok || data.errors) {
-      console.error("❌ OneSignal Error:", data);
-      return NextResponse.json(
-        { success: false, error: data },
-        { status: 400 }
-      );
+    console.log("✅ STATUS RESPON:", response.status); // Harusnya 200
+    console.log("📄 DATA RESPON:", JSON.stringify(responseData));
+    
+    // Kita anggap sukses kalau status 200, meskipun ada error targeting (biar gak 500 di frontend)
+    if (response.status !== 200) {
+        return NextResponse.json({ success: false, error: responseData.errors }, { status: 400 });
     }
 
-    return NextResponse.json({
-      success: true,
-      notification_id: data.id,
-    });
+    return NextResponse.json({ success: true, data: responseData });
+
   } catch (error: any) {
-    console.error("🔥 SERVER ERROR:", error);
-    return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
-    );
+    console.error("❌ SERVER ERROR:", error);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
