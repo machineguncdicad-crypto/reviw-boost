@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image"; 
+import Script from "next/script"; // 👈 1. WAJIB IMPORT INI
 import { usePathname } from "next/navigation"; 
 import { LayoutDashboard, MessageCircle, User, LogOut, Settings, Menu, Sparkles, X } from "lucide-react"; 
 import { supabase } from "@/lib/supabase"; 
@@ -29,16 +30,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         w.OneSignal = w.OneSignal || [];
         w.OneSignal.push(function() {
           w.OneSignal.init({
-            // 👇 APP ID BARU (SAMA DENGAN BACKEND AXIOS)
+            // 👇 Pastikan ID ini SAMA PERSIS dengan yang di .env lu
             appId: "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
             notifyButton: { enable: true }, 
             allowLocalhostAsSecureOrigin: true,
           });
 
           // Login sebagai Owner biar notifnya nyampe ke orang yang tepat
-          // (Ini penting buat targeting di masa depan)
           w.OneSignal.login(user.id);
-          console.log("✅ OneSignal V2 Active for Owner ID:", user.id);
+          console.log("✅ OneSignal Layout Active for:", user.id);
         });
       }
     };
@@ -68,6 +68,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-black text-white font-sans selection:bg-yellow-500/30">
       
+      {/* 👇 2. SCRIPT INI NYAWA-NYA NOTIFIKASI! JANGAN SAMPE ILANG */}
+      <Script 
+        src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" 
+        strategy="lazyOnload" 
+      />
+
       {/* CSS EFEK PETIR */}
       <style jsx global>{`
         @keyframes lightning {

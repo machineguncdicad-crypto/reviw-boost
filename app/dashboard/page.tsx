@@ -3,14 +3,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import axios from "axios"; 
 import { 
   BarChart3, Star, ExternalLink, 
   Copy, Check, TrendingUp, MousePointer2, 
   QrCode, Plus, ScanLine, Download, 
   AlertCircle, X, ThumbsUp, ArrowLeft, Zap, 
-  BellRing, Rocket, Loader2 
+  BellRing, Rocket, Loader2, Bell 
 } from "lucide-react";
 import Link from "next/link";
+
+// ❌ BAGIAN "DECLARE GLOBAL" UDAH GW HAPUS BIAR GAK MERAH
 
 export default function Dashboard() {
   const router = useRouter();
@@ -33,15 +36,16 @@ export default function Dashboard() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedQrId, setExpandedQrId] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  
-  // 🔥 STATE BARU BUAT LOADING DOWNLOAD
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // --- LOGIKA UTAMA (DATA FETCHING) ---
+  // STATE NOTIF
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSendingNotif, setIsSendingNotif] = useState(false);
+
+  // --- LOGIKA UTAMA ---
   useEffect(() => {
     let isMounted = true;
 
-    // Timer jaga-jaga kalau koneksi lemot
     const safetyTimer = setTimeout(() => {
         if (isMounted && loading) {
             setLoading(false);
@@ -61,7 +65,31 @@ export default function Dashboard() {
             return;
         }
 
-        // 2. Ambil Data Toko Lama (Legacy Support)
+        // 🚀 INIT ONESIGNAL (PAKE JURUS 'ANY' BIAR GAK MERAH)
+        if (typeof window !== "undefined") {
+            // 👇 Kita bikin variabel 'w' yang bebas aturan TypeScript
+            const w = window as any; 
+            
+            w.OneSignalDeferred = w.OneSignalDeferred || [];
+            w.OneSignalDeferred.push(async function (OneSignal: any) {
+                await OneSignal.init({
+                    appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
+                    safari_web_id: "web.onesignal.auto.xxxxx", 
+                    notifyButton: { enable: true }, 
+                });
+                
+                await OneSignal.login(user.id);
+                
+                // Cek status subscribe
+                setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
+                
+                OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
+                    setIsSubscribed(event.current.optedIn);
+                });
+            });
+        }
+
+        // 2. Ambil Data Toko Lama
         const { data: campaignsData, error: campError } = await supabase
           .from("campaigns")
           .select("*")
@@ -70,7 +98,7 @@ export default function Dashboard() {
 
         if (campError) throw campError;
 
-        // 3. Ambil Data Toko Baru (PROFILES) - Ini yang utama sekarang
+        // 3. Ambil Data Toko Baru
         const { data: profileData } = await supabase
             .from("profiles")
             .select("*")
@@ -79,7 +107,6 @@ export default function Dashboard() {
 
         let finalCampaigns = campaignsData || [];
 
-        // Gabungkan Profile ke dalam list Campaigns (Biar muncul di UI)
         if (profileData && profileData.business_name) {
             const profileAsCampaign = {
                 id: profileData.id,
@@ -100,19 +127,18 @@ export default function Dashboard() {
         if (isMounted) {
           setCampaigns(finalCampaigns);
 
-          // 4. HITUNG STATISTIK REVIEW
+          // 4. HITUNG STATISTIK
           const campaignIds = finalCampaigns.map((c: any) => c.id);
           let totalRev = 0, happy = 0, sad = 0;
           let visits = 0, clicks = 0;
 
-          // Hitung Visits & Clicks Global
           finalCampaigns.forEach(c => {
               visits += (c.visits || 0);
               clicks += (c.clicks || 0);
           });
 
           if (campaignIds.length > 0) {
-              const { data: feedbacks, error: feedError } = await supabase
+              const { data: feedbacks } = await supabase
                 .from("feedbacks")
                 .select("rating")
                 .in("campaign_id", campaignIds);
@@ -145,7 +171,7 @@ export default function Dashboard() {
 
     fetchData();
     return () => { isMounted = false; };
-  }, []);
+  }, [router]);
 
   // --- HELPER FUNCTIONS ---
   const copyToClipboard = (slug: string, id: string) => {
@@ -160,34 +186,22 @@ export default function Dashboard() {
     else setExpandedQrId(id);
   };
 
-  // 🔥 FUNGSI BARU: DOWNLOAD QR CODE AGAR JADI FILE GAMBAR 🔥
   const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
     setDownloadingId(id);
     try {
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`;
-        
-        // 1. Ambil gambarnya dulu (Fetch)
         const response = await fetch(qrUrl);
         const blob = await response.blob();
-        
-        // 2. Bikin link download palsu
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        // Nama file otomatis rapi: QR-Review-NamaToko.png
         a.download = `QR-Review-${brandName.replace(/\s+/g, '-')}.png`; 
-        
-        // 3. Klik otomatis
         document.body.appendChild(a);
         a.click();
-        
-        // 4. Bersih-bersih
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
     } catch (error) {
         console.error("Gagal download:", error);
-        alert("Gagal download otomatis. Membuka di tab baru...");
-        // Fallback: Buka tab baru kalau gagal
         window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
     } finally {
         setDownloadingId(null);
@@ -195,12 +209,41 @@ export default function Dashboard() {
   };
 
   const handleTestNotification = async (rating: number, type: string) => {
-     alert("Ini tombol tes visual bro. Kalau mau tes notifikasi asli, coba scan QR Code terus isi review pake HP lu!");
+     try {
+        setIsSendingNotif(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        await axios.post('/api/notify', {
+            rating: rating,
+            comment: `Ini adalah tes notifikasi ${type}. Semangat codingnya! 🚀`,
+            brand_name: "ReviewBoost Demo",
+            customer_name: "Developer Ganteng",
+            phone: "0812-TES-TES",
+            owner_id: user?.id, 
+            owner_email: user?.email 
+        });
+
+        alert(`✅ Sukses! Cek HP atau Desktop lu. Harusnya ada notif "${type}".`);
+     } catch (error) {
+        console.error("Gagal kirim notif:", error);
+        alert("❌ Gagal kirim notif. Pastikan API Key benar.");
+     } finally {
+        setIsSendingNotif(false);
+     }
   };
 
-  // --- TAMPILAN UI ---
+  const handleSubscribe = () => {
+    if (typeof window !== "undefined") {
+        const w = window as any; // 👈 Pake jurus 'any' lagi disini
+        if (w.OneSignal) {
+            w.OneSignal.Slidedown.promptPush();
+        } else {
+            alert("OneSignal belum siap. Refresh halaman.");
+        }
+    }
+  };
 
-  // Loading Screen
+  // --- TAMPILAN UI (SAMA PERSIS, GAK DIUBAH) ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -208,7 +251,6 @@ export default function Dashboard() {
     </div>
   );
 
-  // Error Screen
   if (errorMsg) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-900 dark:text-white p-6 text-center pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="p-4 rounded-full bg-red-500/10 mb-4 animate-bounce"><AlertCircle size={48} className="text-red-500"/></div>
@@ -246,33 +288,52 @@ export default function Dashboard() {
             <div className="bg-white/50 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-amber-500/20 rounded-3xl p-6 relative overflow-hidden group shadow-sm">
                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                    <div className="flex items-start gap-4">
-                       <div className="p-3 bg-amber-500/10 rounded-xl text-amber-500 border border-amber-500/20">
-                           <BellRing size={24} />
+                       <div className={`p-3 rounded-xl border ${isSubscribed ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                           {isSubscribed ? <Check size={24} /> : <BellRing size={24} className={isSubscribed ? "" : "animate-pulse"} />}
                        </div>
                        <div>
                            <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                                Service Recovery System
-                               <span className="text-[10px] bg-amber-500 text-black px-2 py-0.5 rounded font-bold uppercase">Active</span>
+                               {isSubscribed ? (
+                                   <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold uppercase">Connected</span>
+                               ) : (
+                                   <span className="text-[10px] bg-zinc-500 text-white px-2 py-0.5 rounded font-bold uppercase">Disconnected</span>
+                               )}
                            </h3>
                            <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 max-w-lg">
-                               Notifikasi bakal masuk ke HP lu kalau ada review baru.
+                               {isSubscribed 
+                                ? "Notifikasi aktif! HP lu bakal bunyi kalau ada review masuk." 
+                                : "Klik tombol 'Aktifkan Notif' biar gak ketinggalan komplain customer!"}
                            </p>
                        </div>
                    </div>
 
                    <div className="flex gap-3 w-full md:w-auto">
-                      <button 
-                        onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95"
-                      >
-                        😡 Tes Bahaya
-                      </button>
-                      <button 
-                        onClick={() => handleTestNotification(5, "AMAN (⭐5)")}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-500 border border-green-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95"
-                      >
-                        🌟 Tes Aman
-                      </button>
+                      {!isSubscribed ? (
+                          <button 
+                            onClick={handleSubscribe}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-zinc-900 text-white dark:bg-white dark:text-black px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 shadow-lg"
+                          >
+                            <Bell size={16}/> Aktifkan Notif
+                          </button>
+                      ) : (
+                          <>
+                              <button 
+                                onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
+                                disabled={isSendingNotif}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                              >
+                                {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "😡 Tes Bahaya"}
+                              </button>
+                              <button 
+                                onClick={() => handleTestNotification(5, "AMAN (⭐5)")}
+                                disabled={isSendingNotif}
+                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-500 border border-green-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                              >
+                                {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "🌟 Tes Aman"}
+                              </button>
+                          </>
+                      )}
                    </div>
                </div>
             </div>
@@ -439,7 +500,6 @@ export default function Dashboard() {
                                                 Cetak QR Code ini dan tempel di meja kasir atau kemasan produkmu. Pelanggan tinggal scan buat kasih review.
                                             </p>
                                             
-                                            {/* 🔥 TOMBOL DOWNLOAD YANG UDAH DIPERBAIKI 🔥 */}
                                             <button 
                                                 onClick={() => handleDownloadQr(camp.slug, camp.brand_name, camp.id)}
                                                 disabled={downloadingId === camp.id}
