@@ -65,27 +65,26 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 INIT ONESIGNAL (PAKE JURUS 'ANY' BIAR GAK MERAH)
+        // 🚀 BAGIAN INI YANG GW UBAH DIKIT (HAPUS INIT) 🚀
         if (typeof window !== "undefined") {
-            // 👇 Kita bikin variabel 'w' yang bebas aturan TypeScript
             const w = window as any; 
             
             w.OneSignalDeferred = w.OneSignalDeferred || [];
             w.OneSignalDeferred.push(async function (OneSignal: any) {
-                await OneSignal.init({
-                    appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
-                    safari_web_id: "web.onesignal.auto.xxxxx", 
-                    notifyButton: { enable: true }, 
-                });
                 
+                // ❌ INIT GW HAPUS DISINI (Biar gak bentrok sama Layout)
+                
+                // ✅ Cuma Login User Aja (Biar notifnya personal)
                 await OneSignal.login(user.id);
                 
                 // Cek status subscribe
-                setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
-                
-                OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
-                    setIsSubscribed(event.current.optedIn);
-                });
+                if (OneSignal.User && OneSignal.User.PushSubscription) {
+                    setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
+                    
+                    OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
+                        setIsSubscribed(event.current.optedIn);
+                    });
+                }
             });
         }
 

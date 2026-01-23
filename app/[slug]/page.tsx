@@ -145,20 +145,17 @@ export default function PublicReviewPage() {
     if (slug) fetchStore();
   }, [slug]);
 
-  // 🔥 2. NOTIFIKASI (SUDAH DIPERBAIKI) 🔥
-  // Sekarang pake API Route Internal, bukan langsung ke OneSignal
+  // 2. NOTIFIKASI
   const sendNotification = async (stars: number, text: string, custName: string) => {
-    // Cari ID Owner (Bisa dari user_id kalo campaign, atau id kalo profile)
     const targetOwnerId = store.user_id || store.id;
-
-    if (!targetOwnerId) return; // Kalo gak ada ownernya, batalin
+    if (!targetOwnerId) return; 
 
     try {
       await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            owner_id: targetOwnerId, // 👈 PENTING: ID Owner
+            owner_id: targetOwnerId, 
             rating: stars,
             comment: text,
             brand_name: store.business_name || store.brand_name,
@@ -169,7 +166,6 @@ export default function PublicReviewPage() {
       console.log("Notif sent via API!");
     } catch (e) { 
         console.error("Gagal kirim notif:", e); 
-        // Gak perlu alert error, biar user tetep hepi
     }
   };
 
@@ -191,7 +187,6 @@ export default function PublicReviewPage() {
         customer_phone: phone || "-" 
     });
 
-    // Panggil fungsi notifikasi yg baru
     await sendNotification(rating, feedback, name || "Anonim");
 
     setTimeout(() => { 
@@ -200,12 +195,24 @@ export default function PublicReviewPage() {
     }, 1000);
   };
 
-  // 5. GOOGLE MAPS
-  const handleGoToMaps = async () => {
-      await supabase.rpc('increment_click', { row_id: store.id });
-      if (store.google_map_url) {
-          window.open(store.google_map_url, '_blank');
+  // 🔥 5. GOOGLE MAPS (VERSI BERSIH - FIRE AND FORGET) 🔥
+  const handleGoToMaps = () => {
+      // 1. Ambil URL
+      const url = store.google_map_url;
+      if (!url) return;
+
+      // 2. Logic Buka Link (HP vs Laptop)
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      
+      if (isMobile) {
+          window.location.href = url;
+      } else {
+          window.open(url, '_blank');
       }
+
+      // 3. Rekam Klik (Tanpa Then/Catch Biar Gak Merah)
+      // Pake 'void' biar TypeScript tau kita sengaja gak nungguin hasilnya
+      void supabase.rpc('increment_click', { row_id: store.id });
   };
 
   const copyFeedback = () => {
