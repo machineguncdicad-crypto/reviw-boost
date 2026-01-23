@@ -63,27 +63,32 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 BAGIAN ONESIGNAL (SUDAH DIPASANG PENGAMAN) 🚀
+        // 🚀 INIT ONESIGNAL (DENGAN PENGAMAN 'SMART CHECK') 🚀
         if (typeof window !== "undefined") {
             const w = window as any; 
             
             w.OneSignalDeferred = w.OneSignalDeferred || [];
             w.OneSignalDeferred.push(async function (OneSignal: any) {
                 
-                // 🔥 PENGAMAN: Cek dulu udah nyala belum?
-                // Kalau belum nyala (!initialized), baru kita nyalain.
+                // 🔥 PENGAMAN UTAMA DISINI 🔥
+                // Kita cek: Apakah OneSignal SUDAH jalan dari Layout?
+                // Kalau BELUM (!initialized), baru kita nyalakan manual.
                 if (!OneSignal.initialized) {
+                    console.log("⚠️ Layout telat, Dashboard ambil alih init OneSignal.");
                     await OneSignal.init({
-                        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
-                        safari_web_id: "web.onesignal.auto.xxxxx", // Ganti kalau punya ID Safari
+                        // Pastikan ENV ini isinya SAMA PERSIS dengan ID di Layout lu: "72b814c6-..."
+                        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
+                        safari_web_id: "web.onesignal.auto.xxxxx", 
                         notifyButton: { enable: true }, 
                     });
+                } else {
+                    console.log("✅ Aman, OneSignal sudah dinyalakan oleh Layout.");
                 }
                 
-                // Login User (Biar notifnya personal ke user ini aja)
+                // Login tetep jalan biar notifnya personal
                 await OneSignal.login(user.id);
                 
-                // Cek status subscribe buat update tampilan tombol
+                // Cek status subscribe
                 if (OneSignal.User && OneSignal.User.PushSubscription) {
                     setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
                     
@@ -248,7 +253,7 @@ export default function Dashboard() {
     }
   };
 
-  // --- TAMPILAN UI (SAMA PERSIS) ---
+  // --- TAMPILAN UI ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
