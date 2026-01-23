@@ -13,8 +13,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-// ❌ BAGIAN "DECLARE GLOBAL" UDAH GW HAPUS BIAR GAK MERAH
-
 export default function Dashboard() {
   const router = useRouter();
   
@@ -65,19 +63,27 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 BAGIAN INI YANG GW UBAH DIKIT (HAPUS INIT) 🚀
+        // 🚀 BAGIAN ONESIGNAL (SUDAH DIPASANG PENGAMAN) 🚀
         if (typeof window !== "undefined") {
             const w = window as any; 
             
             w.OneSignalDeferred = w.OneSignalDeferred || [];
             w.OneSignalDeferred.push(async function (OneSignal: any) {
                 
-                // ❌ INIT GW HAPUS DISINI (Biar gak bentrok sama Layout)
+                // 🔥 PENGAMAN: Cek dulu udah nyala belum?
+                // Kalau belum nyala (!initialized), baru kita nyalain.
+                if (!OneSignal.initialized) {
+                    await OneSignal.init({
+                        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
+                        safari_web_id: "web.onesignal.auto.xxxxx", // Ganti kalau punya ID Safari
+                        notifyButton: { enable: true }, 
+                    });
+                }
                 
-                // ✅ Cuma Login User Aja (Biar notifnya personal)
+                // Login User (Biar notifnya personal ke user ini aja)
                 await OneSignal.login(user.id);
                 
-                // Cek status subscribe
+                // Cek status subscribe buat update tampilan tombol
                 if (OneSignal.User && OneSignal.User.PushSubscription) {
                     setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
                     
@@ -233,7 +239,7 @@ export default function Dashboard() {
 
   const handleSubscribe = () => {
     if (typeof window !== "undefined") {
-        const w = window as any; // 👈 Pake jurus 'any' lagi disini
+        const w = window as any;
         if (w.OneSignal) {
             w.OneSignal.Slidedown.promptPush();
         } else {
@@ -242,7 +248,7 @@ export default function Dashboard() {
     }
   };
 
-  // --- TAMPILAN UI (SAMA PERSIS, GAK DIUBAH) ---
+  // --- TAMPILAN UI (SAMA PERSIS) ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
