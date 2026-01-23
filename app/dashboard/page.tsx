@@ -242,13 +242,20 @@ export default function Dashboard() {
      }
   };
 
+  // 🔥 UPDATE FUNGSI SUBSCRIBE (VERSI PAKSA POPUP) 🔥
   const handleSubscribe = () => {
     if (typeof window !== "undefined") {
         const w = window as any;
+        
         if (w.OneSignal) {
-            w.OneSignal.Slidedown.promptPush();
+            console.log("Memaksa browser minta izin notif...");
+            
+            // JURUS BARU: optIn()
+            // Ini bakal langsung trigger popup browser "Allow Notifications"
+            w.OneSignal.User.PushSubscription.optIn();
         } else {
-            alert("OneSignal belum siap. Refresh halaman.");
+            console.log("OneSignal belum siap loading.");
+            alert("Sistem notifikasi belum siap. Tunggu sebentar dan coba lagi.");
         }
     }
   };
