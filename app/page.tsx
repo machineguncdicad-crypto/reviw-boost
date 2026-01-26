@@ -163,7 +163,7 @@ export default function LandingPage() {
           </div>
       </section>
 
-      {/* --- VIDEO DEMO --- */}
+      {/* --- VIDEO DEMO (UPDATED) --- */}
       <section id="demo" className="py-24 bg-zinc-950 relative overflow-hidden scroll-mt-20">
         <div className="absolute -left-40 top-1/2 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
         <div className="absolute -right-40 top-1/2 w-96 h-96 bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"></div>
@@ -174,15 +174,26 @@ export default function LandingPage() {
               <p className="text-zinc-400">Tonton bagaimana sistem kami bekerja dalam 30 detik.</p>
            </div>
            
-           <div className="relative aspect-video w-full bg-zinc-900/50 rounded-[2rem] border border-zinc-800 shadow-[0_0_60px_rgba(0,0,0,0.5)] overflow-hidden flex items-center justify-center group cursor-pointer hover:border-amber-500/30 transition duration-500">
-              <div className="text-center space-y-4">
-                  <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto border border-white/10 group-hover:scale-110 group-hover:bg-amber-500 group-hover:text-black group-hover:border-amber-500 transition duration-300 backdrop-blur-sm">
-                      <Play size={32} className="ml-1" fill="currentColor"/>
-                  </div>
-                  <p className="text-zinc-500 text-sm font-mono uppercase tracking-widest group-hover:text-zinc-300 transition">Area Video Demo</p>
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-500 pointer-events-none"></div>
+           {/* 🔥 VIDEO PLAYER START 🔥 */}
+           <div className="relative w-full aspect-video bg-zinc-900/50 rounded-[2rem] border border-zinc-800 shadow-[0_0_60px_rgba(0,0,0,0.5)] overflow-hidden group hover:border-amber-500/30 transition duration-500">
+               <video 
+                   autoPlay 
+                   loop 
+                   muted 
+                   playsInline 
+                   className="w-full h-full object-cover"
+               >
+                   {/* Pastikan nama file di folder public sama persis (Case Sensitive) */}
+                   <source src="/Demo-Reviewboost.MOV" type="video/quicktime" />
+                   <source src="/Demo-Reviewboost.MOV" type="video/mp4" />
+                   Browser Anda tidak mendukung tag video.
+               </video>
+               
+               {/* Overlay tipis biar kelihatan menyatu sama tema gelap */}
+               <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/20 to-transparent"></div>
            </div>
+           {/* 🔥 VIDEO PLAYER END 🔥 */}
+
         </div>
       </section>
 
