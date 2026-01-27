@@ -114,14 +114,17 @@ export default function Dashboard() {
 
         let finalCampaigns = campaignsData || [];
 
-        // 🔥 [TAMBAHAN BARU] FIX SLUG KOSONG AGAR QR CODE GAK ERROR 🔥
-        // Logic: Cek setiap data, kalau slug kosong, bikin slug baru dari nama brand.
+        // -------------------------------------------------------------
+        // 🔥🔥🔥 BAGIAN PENYELAMAT QR CODE (FIX) 🔥🔥🔥
+        // Logic: Kita paksa cek satu-satu. Kalau slug kosong, kita buatin dari nama brand.
+        // Ini biar QR Code gak nge-generate link buntung (cuma domain doang).
         finalCampaigns = finalCampaigns.map((c: any) => ({
             ...c,
             slug: (c.slug && c.slug.length > 1) 
                   ? c.slug 
-                  : c.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                  : c.brand_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
         }));
+        // -------------------------------------------------------------
 
         if (profileData && profileData.business_name) {
             const profileAsCampaign = {
@@ -129,7 +132,7 @@ export default function Dashboard() {
                 user_id: profileData.id,
                 brand_name: profileData.business_name,
                 // Pastikan Profile juga punya fallback slug
-                slug: profileData.slug || profileData.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+                slug: profileData.slug || profileData.business_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
                 visits: profileData.visits || 0,
                 clicks: profileData.clicks || 0,
                 created_at: profileData.updated_at
@@ -192,7 +195,10 @@ export default function Dashboard() {
 
   // --- HELPER FUNCTIONS ---
   const copyToClipboard = (slug: string, id: string) => {
-    const url = `${window.location.origin}/${slug}`;
+    // Pengaman Link juga di sini
+    const validSlug = (slug && slug.length > 1) ? slug : "error-link";
+    const url = `${window.location.origin}/${validSlug}`;
+    
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -205,8 +211,13 @@ export default function Dashboard() {
 
   const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
     setDownloadingId(id);
+    
+    // Pengaman Link juga di sini
+    const validSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const fullUrl = `${window.location.origin}/${validSlug}`;
+
     try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`;
         const response = await fetch(qrUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -219,7 +230,7 @@ export default function Dashboard() {
         window.URL.revokeObjectURL(url);
     } catch (error) {
         console.error("Gagal download:", error);
-        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
+        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`, '_blank');
     } finally {
         setDownloadingId(null);
     }
