@@ -10,8 +10,9 @@ const supabaseAdmin = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// 🔥 UPDATE DISINI: GANTI JADI TRUE BIAR COCOK SAMA KUNCI PRODUCTION 🔥
 const snap = new Midtrans.Snap({
-    isProduction: false,
+    isProduction: true, // 👈 WAJIB TRUE!
     serverKey: process.env.MIDTRANS_SERVER_KEY,
     clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY
 });
@@ -29,13 +30,12 @@ export async function POST(request: Request) {
         }
 
         // 🔥 JURUS BARU: BIKIN CLIENT KHUSUS BUAT USER INI 🔥
-        // Kita langsung inject tokennya di konfigurasi awal. Lebih paten.
         const supabaseUser = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             {
                 global: {
-                    headers: { Authorization: authHeader }, // 👈 Tempel KTP disini
+                    headers: { Authorization: authHeader },
                 },
             }
         );
