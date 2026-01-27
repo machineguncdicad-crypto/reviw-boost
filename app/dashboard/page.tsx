@@ -71,12 +71,9 @@ export default function Dashboard() {
             w.OneSignalDeferred.push(async function (OneSignal: any) {
                 
                 // 🔥 PENGAMAN UTAMA DISINI 🔥
-                // Kita cek: Apakah OneSignal SUDAH jalan dari Layout?
-                // Kalau BELUM (!initialized), baru kita nyalakan manual.
                 if (!OneSignal.initialized) {
                     console.log("⚠️ Layout telat, Dashboard ambil alih init OneSignal.");
                     await OneSignal.init({
-                        // Pastikan ENV ini isinya SAMA PERSIS dengan ID di Layout lu: "72b814c6-..."
                         appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
                         safari_web_id: "web.onesignal.auto.xxxxx", 
                         notifyButton: { enable: true }, 
@@ -117,11 +114,21 @@ export default function Dashboard() {
 
         let finalCampaigns = campaignsData || [];
 
+        // 🔥 [TAMBAHAN BARU] FIX SLUG KOSONG AGAR QR CODE GAK ERROR 🔥
+        // Logic: Cek setiap data, kalau slug kosong, bikin slug baru dari nama brand.
+        finalCampaigns = finalCampaigns.map((c: any) => ({
+            ...c,
+            slug: (c.slug && c.slug.length > 1) 
+                  ? c.slug 
+                  : c.brand_name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+        }));
+
         if (profileData && profileData.business_name) {
             const profileAsCampaign = {
                 id: profileData.id,
                 user_id: profileData.id,
                 brand_name: profileData.business_name,
+                // Pastikan Profile juga punya fallback slug
                 slug: profileData.slug || profileData.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                 visits: profileData.visits || 0,
                 clicks: profileData.clicks || 0,
@@ -249,9 +256,6 @@ export default function Dashboard() {
         
         if (w.OneSignal) {
             console.log("Memaksa browser minta izin notif...");
-            
-            // JURUS BARU: optIn()
-            // Ini bakal langsung trigger popup browser "Allow Notifications"
             w.OneSignal.User.PushSubscription.optIn();
         } else {
             console.log("OneSignal belum siap loading.");

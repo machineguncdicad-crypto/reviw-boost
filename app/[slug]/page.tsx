@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useParams } from "next/navigation";
 
-// --- 1. KAMUS BAHASA (FULL INDO) ---
+// --- 1. KAMUS BAHASA (FULL INDO & INGGRIS) ---
 const translations: any = {
   id: {
     title: "Gimana pengalamanmu?",
@@ -56,7 +56,7 @@ const translations: any = {
   }
 };
 
-// --- 2. MAPPING WARNA ---
+// --- 2. MAPPING WARNA BRANDING ---
 const colorMap: any = {
     amber: { bg: "bg-amber-500", text: "text-amber-500", border: "border-amber-500", ring: "focus:ring-amber-500", light: "bg-amber-500/10", star: "text-amber-400 fill-amber-400" },
     blue: { bg: "bg-blue-600", text: "text-blue-600", border: "border-blue-600", ring: "focus:ring-blue-600", light: "bg-blue-600/10", star: "text-blue-400 fill-blue-400" },
@@ -67,7 +67,8 @@ const colorMap: any = {
 
 export default function PublicReviewPage() {
   const params = useParams();
-  const slug = params?.slug as string;
+  // Handle slug biar gak error kalau undefined
+  const slug = params?.slug ? String(params.slug) : "";
 
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<any>(null);
@@ -75,27 +76,31 @@ export default function PublicReviewPage() {
   const [step, setStep] = useState(1); 
   const [feedback, setFeedback] = useState("");
   
-  // Data Customer
+  // Data Customer (Opsional)
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
 
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
   
-  // STATE SETTING
+  // DEFAULT SETTING (Kalau user belum setting di dashboard)
   const [minRatingGoogle, setMinRatingGoogle] = useState(4); 
   const [brandColor, setBrandColor] = useState("amber");
   const [language, setLanguage] = useState("id");
 
+  // Ref biar increment visit gak jalan 2x (React Strict Mode safety)
   const hasCountedVisit = useRef(false);
 
-  // 1. LOAD DATA
+  // 1. LOAD DATA TOKO
   useEffect(() => {
     const fetchStore = async () => {
+      if (!slug) return;
+      
       try {
         let currentStore = null;
         let ownerId = null; 
         
+        // Cek Tabel PROFILES (Toko Baru)
         const { data: profile } = await supabase.from("profiles").select("*").eq("slug", slug).single();
         
         if (profile) {
@@ -103,11 +108,13 @@ export default function PublicReviewPage() {
             currentStore = profile;
             ownerId = profile.id;
             
+            // Ambil settingan custom user
             if (profile.min_rating_google) setMinRatingGoogle(profile.min_rating_google);
             if (profile.brand_color) setBrandColor(profile.brand_color);
             if (profile.language) setLanguage(profile.language);
 
         } else {
+            // Fallback: Cek Tabel CAMPAIGNS (Toko Lama)
             const { data: camp } = await supabase.from("campaigns").select("*").eq("slug", slug).single();
             if (camp) {
                 setStore({ ...camp, business_name: camp.brand_name });
@@ -116,6 +123,7 @@ export default function PublicReviewPage() {
             }
         }
 
+        // Kalau dapet toko tapi belum dapet settingan (kasus tabel campaigns), ambil settingan dari owner
         if (currentStore && ownerId && !profile) {
             const { data: ownerSettings } = await supabase
                 .from("profiles")
@@ -130,8 +138,10 @@ export default function PublicReviewPage() {
             }
         }
 
+        // Catat Kunjungan (Visit Counter)
         if (currentStore && !hasCountedVisit.current) {
             hasCountedVisit.current = true;
+            // Panggil RPC database biar aman & cepet
             await supabase.rpc('increment_visit', { row_id: currentStore.id });
         }
 
@@ -142,10 +152,10 @@ export default function PublicReviewPage() {
       }
     };
 
-    if (slug) fetchStore();
+    fetchStore();
   }, [slug]);
 
-  // 2. NOTIFIKASI
+  // 2. FUNGSI KIRIM NOTIFIKASI (WA / ONESIGNAL)
   const sendNotification = async (stars: number, text: string, custName: string) => {
     const targetOwnerId = store.user_id || store.id;
     if (!targetOwnerId) return; 
@@ -163,22 +173,23 @@ export default function PublicReviewPage() {
             phone: phone
         })
       });
-      console.log("Notif sent via API!");
     } catch (e) { 
         console.error("Gagal kirim notif:", e); 
     }
   };
 
-  // 3. RATING
+  // 3. LOGIKA RATING
   const handleRating = (star: number) => {
     setRating(star);
+    // Delay dikit biar animasinya enak
     setTimeout(() => setStep(2), 300);
   };
 
-  // 4. SUBMIT
+  // 4. SUBMIT REVIEW KE DATABASE
   const submitFeedback = async () => {
     setSending(true);
     
+    // Simpan ke Supabase
     await supabase.from("feedbacks").insert({
         campaign_id: store.id, 
         rating: rating, 
@@ -187,6 +198,7 @@ export default function PublicReviewPage() {
         customer_phone: phone || "-" 
     });
 
+    // Kirim Notif ke Owner
     await sendNotification(rating, feedback, name || "Anonim");
 
     setTimeout(() => { 
@@ -195,13 +207,12 @@ export default function PublicReviewPage() {
     }, 1000);
   };
 
-  // 🔥 5. GOOGLE MAPS (VERSI BERSIH - FIRE AND FORGET) 🔥
+  // 5. REDIRECT KE GOOGLE MAPS (PENGAMANAN)
   const handleGoToMaps = () => {
-      // 1. Ambil URL
       const url = store.google_map_url;
       if (!url) return;
 
-      // 2. Logic Buka Link (HP vs Laptop)
+      // Cek Device (Buka App Maps kalau di HP)
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
       if (isMobile) {
@@ -210,21 +221,23 @@ export default function PublicReviewPage() {
           window.open(url, '_blank');
       }
 
-      // 3. Rekam Klik (Tanpa Then/Catch Biar Gak Merah)
-      // Pake 'void' biar TypeScript tau kita sengaja gak nungguin hasilnya
+      // Catat Klik (Analytics) - Pakai 'void' biar gak nunggu response
       void supabase.rpc('increment_click', { row_id: store.id });
   };
 
+  // Helper Copy Text
   const copyFeedback = () => {
       navigator.clipboard.writeText(feedback);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
   };
 
+  // Tentukan Tema & Bahasa
   const isEligibleForMaps = rating >= minRatingGoogle;
   const theme = colorMap[brandColor] || colorMap.amber;
   const t = translations[language] || translations.id;
 
+  // --- RENDER TAMPILAN ---
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin text-amber-500"/></div>;
   
   if (!store) return (
@@ -238,8 +251,10 @@ export default function PublicReviewPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white font-sans flex flex-col items-center justify-center p-6 relative overflow-hidden">
         
+        {/* Background Glow */}
         <div className={`absolute top-0 w-full h-96 bg-gradient-to-b ${theme.light.replace("/10", "/20")} to-transparent blur-3xl pointer-events-none`}></div>
         
+        {/* STEP 1: PILIH BINTANG */}
         {step === 1 && (
             <div className="text-center z-10 animate-in zoom-in-95 w-full max-w-sm">
                 <div className={`w-24 h-24 bg-zinc-900 border-2 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl overflow-hidden ${theme.border}`}>
@@ -251,6 +266,7 @@ export default function PublicReviewPage() {
                 </div>
                 <h1 className="text-2xl font-black mb-2 tracking-tight">{store.business_name}</h1>
                 <p className="text-zinc-400 mb-10 text-sm font-medium">{t.subtitle}</p>
+                
                 <div className="flex justify-between px-2 mb-8">
                     {[1,2,3,4,5].map(s => (
                         <Star 
@@ -265,6 +281,7 @@ export default function PublicReviewPage() {
             </div>
         )}
 
+        {/* STEP 2: ISI KOMENTAR & DATA */}
         {step === 2 && (
             <div className="w-full max-w-md z-10 animate-in fade-in slide-in-from-bottom-4">
                 <div className="text-center mb-8">
@@ -323,10 +340,12 @@ export default function PublicReviewPage() {
             </div>
         )}
 
+        {/* STEP 3: FINAL SCREEN (FILTERING) */}
         {step === 3 && (
             <div className="text-center z-10 animate-in zoom-in-95 w-full max-w-sm">
                 
                 {isEligibleForMaps ? (
+                    // SKENARIO HAPPY: DORONG KE GOOGLE MAPS
                     <>
                         <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${theme.light}`}>
                             <CheckCircle2 size={48} className={theme.text}/>
@@ -353,6 +372,7 @@ export default function PublicReviewPage() {
                         </div>
                     </>
                 ) : (
+                    // SKENARIO BAD: TAMPUNG INTERNAL AJA
                     <div className="bg-zinc-900/80 p-8 rounded-3xl border border-zinc-800">
                         <div className="w-20 h-20 bg-black border border-zinc-800 rounded-full flex items-center justify-center mx-auto mb-6">
                             <MessageCircle size={32} className="text-zinc-400"/>
