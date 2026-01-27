@@ -21,7 +21,7 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState("");
   const [campaigns, setCampaigns] = useState<any[]>([]);
   
-  // State Statistik Real-time
+  // State Statistik
   const [stats, setStats] = useState({
     totalVisits: 0,
     totalClicks: 0,
@@ -44,6 +44,7 @@ export default function Dashboard() {
   useEffect(() => {
     let isMounted = true;
 
+    // Safety Timer (Biar gak loading selamanya)
     const safetyTimer = setTimeout(() => {
         if (isMounted && loading) {
             setLoading(false);
@@ -63,38 +64,45 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 INIT ONESIGNAL (DENGAN PENGAMAN 'SMART CHECK') 🚀
+        // -------------------------------------------------------------
+        // 🚀 FIX ONESIGNAL: CEK STATUS TANPA RE-INIT BERULANG 🚀
+        // -------------------------------------------------------------
         if (typeof window !== "undefined") {
             const w = window as any; 
             
-            w.OneSignalDeferred = w.OneSignalDeferred || [];
-            w.OneSignalDeferred.push(async function (OneSignal: any) {
-                
-                // 🔥 PENGAMAN UTAMA DISINI 🔥
-                if (!OneSignal.initialized) {
-                    console.log("⚠️ Layout telat, Dashboard ambil alih init OneSignal.");
-                    await OneSignal.init({
-                        appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
-                        safari_web_id: "web.onesignal.auto.xxxxx", 
-                        notifyButton: { enable: true }, 
-                    });
-                } else {
-                    console.log("✅ Aman, OneSignal sudah dinyalakan oleh Layout.");
-                }
-                
-                // Login tetep jalan biar notifnya personal
-                await OneSignal.login(user.id);
-                
-                // Cek status subscribe
-                if (OneSignal.User && OneSignal.User.PushSubscription) {
-                    setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
-                    
-                    OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
+            // Fungsi buat update status React State
+            const updateOneSignalState = (OS: any) => {
+                if (OS.User && OS.User.PushSubscription) {
+                    setIsSubscribed(OS.User.PushSubscription.optedIn);
+                    OS.User.PushSubscription.addEventListener("change", (event: any) => {
                         setIsSubscribed(event.current.optedIn);
                     });
                 }
-            });
+            };
+
+            // Skenario A: OneSignal SUDAH Ready (Misal dari halaman sebelumnya)
+            if (w.OneSignal && w.OneSignal.initialized) {
+                console.log("✅ OneSignal sudah aktif, sync status aja.");
+                w.OneSignal.login(user.id);
+                updateOneSignalState(w.OneSignal);
+            } 
+            // Skenario B: OneSignal BELUM Ready (Baru refresh page)
+            else {
+                w.OneSignalDeferred = w.OneSignalDeferred || [];
+                w.OneSignalDeferred.push(async function (OneSignal: any) {
+                    if (!OneSignal.initialized) {
+                        await OneSignal.init({
+                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
+                            safari_web_id: "web.onesignal.auto.xxxxx", 
+                            notifyButton: { enable: true }, 
+                        });
+                    }
+                    await OneSignal.login(user.id);
+                    updateOneSignalState(OneSignal);
+                });
+            }
         }
+        // -------------------------------------------------------------
 
         // 2. Ambil Data Toko Lama
         const { data: campaignsData, error: campError } = await supabase
@@ -114,24 +122,19 @@ export default function Dashboard() {
 
         let finalCampaigns = campaignsData || [];
 
-        // -------------------------------------------------------------
-        // 🔥🔥🔥 BAGIAN PENYELAMAT QR CODE (FIX) 🔥🔥🔥
-        // Logic: Kita paksa cek satu-satu. Kalau slug kosong, kita buatin dari nama brand.
-        // Ini biar QR Code gak nge-generate link buntung (cuma domain doang).
+        // 🔥 LOGIKA PENYELAMAT QR CODE (TETAP ADA) 🔥
         finalCampaigns = finalCampaigns.map((c: any) => ({
             ...c,
             slug: (c.slug && c.slug.length > 1) 
                   ? c.slug 
                   : c.brand_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
         }));
-        // -------------------------------------------------------------
 
         if (profileData && profileData.business_name) {
             const profileAsCampaign = {
                 id: profileData.id,
                 user_id: profileData.id,
                 brand_name: profileData.business_name,
-                // Pastikan Profile juga punya fallback slug
                 slug: profileData.slug || profileData.business_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
                 visits: profileData.visits || 0,
                 clicks: profileData.clicks || 0,
@@ -194,10 +197,10 @@ export default function Dashboard() {
   }, [router]);
 
   // --- HELPER FUNCTIONS ---
-  const copyToClipboard = (slug: string, id: string) => {
-    // Pengaman Link juga di sini
-    const validSlug = (slug && slug.length > 1) ? slug : "error-link";
-    const url = `${window.location.origin}/${validSlug}`;
+  const copyToClipboard = (slug: string, brandName: string, id: string) => {
+    // Logic Penyelamat Link di Tombol Copy
+    const safeSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const url = `${window.location.origin}/${safeSlug}`;
     
     navigator.clipboard.writeText(url);
     setCopiedId(id);
@@ -211,10 +214,9 @@ export default function Dashboard() {
 
   const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
     setDownloadingId(id);
-    
-    // Pengaman Link juga di sini
-    const validSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-    const fullUrl = `${window.location.origin}/${validSlug}`;
+    // Logic Penyelamat Link di Tombol Download
+    const safeSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const fullUrl = `${window.location.origin}/${safeSlug}`;
 
     try {
         const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`;
@@ -229,7 +231,6 @@ export default function Dashboard() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
     } catch (error) {
-        console.error("Gagal download:", error);
         window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`, '_blank');
     } finally {
         setDownloadingId(null);
@@ -260,17 +261,13 @@ export default function Dashboard() {
      }
   };
 
-  // 🔥 UPDATE FUNGSI SUBSCRIBE (VERSI PAKSA POPUP) 🔥
   const handleSubscribe = () => {
     if (typeof window !== "undefined") {
         const w = window as any;
-        
         if (w.OneSignal) {
-            console.log("Memaksa browser minta izin notif...");
             w.OneSignal.User.PushSubscription.optIn();
         } else {
-            console.log("OneSignal belum siap loading.");
-            alert("Sistem notifikasi belum siap. Tunggu sebentar dan coba lagi.");
+            alert("OneSignal belum siap. Refresh halaman.");
         }
     }
   };
@@ -497,7 +494,7 @@ export default function Dashboard() {
                                 
                                 <div className="flex gap-2 w-full md:w-auto">
                                     <button 
-                                        onClick={() => copyToClipboard(camp.slug, camp.id)} 
+                                        onClick={() => copyToClipboard(camp.slug, camp.brand_name, camp.id)} 
                                         className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-zinc-100 dark:bg-white text-zinc-900 dark:text-black hover:bg-zinc-200 dark:hover:bg-zinc-200 transition shadow-lg shadow-black/5 dark:shadow-white/5 active:scale-95 border border-zinc-200 dark:border-transparent"
                                     >
                                         {copiedId === camp.id ? <Check size={16} className="text-green-600"/> : <Copy size={16}/>} 
