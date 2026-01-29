@@ -13,8 +13,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-// ❌ BAGIAN "DECLARE GLOBAL" UDAH GW HAPUS BIAR GAK MERAH
-
 export default function Dashboard() {
   const router = useRouter();
   
@@ -38,9 +36,9 @@ export default function Dashboard() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // STATE NOTIF
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  // STATE NOTIF (Cuma butuh status loading kirim aja sekarang)
   const [isSendingNotif, setIsSendingNotif] = useState(false);
+  // (Variable isSubscribed gw hapus karena kita bikin selalu ready)
 
   // --- LOGIKA UTAMA ---
   useEffect(() => {
@@ -65,29 +63,35 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 INIT ONESIGNAL (PAKE JURUS 'ANY' BIAR GAK MERAH)
+        // -----------------------------------------------------------
+        // 🔥 BAGIAN NOTIFIKASI (YANG DIUBAH) 🔥
+        // Logic: Cek dulu udah jalan belum? Kalo udah, gausah init ulang.
+        // -----------------------------------------------------------
         if (typeof window !== "undefined") {
-            // 👇 Kita bikin variabel 'w' yang bebas aturan TypeScript
             const w = window as any; 
             
-            w.OneSignalDeferred = w.OneSignalDeferred || [];
-            w.OneSignalDeferred.push(async function (OneSignal: any) {
-                await OneSignal.init({
-                    appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
-                    safari_web_id: "web.onesignal.auto.xxxxx", 
-                    notifyButton: { enable: true }, 
+            // Cek apakah OneSignal SUDAH ada dan SUDAH init?
+            if (w.OneSignal && w.OneSignal.initialized) {
+                // Kalo udah aktif, cukup login user aja (biar sinkron)
+                w.OneSignal.login(user.id);
+            } else {
+                // Kalo belum, baru kita jalankan init
+                w.OneSignalDeferred = w.OneSignalDeferred || [];
+                w.OneSignalDeferred.push(async function (OneSignal: any) {
+                    if (!OneSignal.initialized) {
+                        await OneSignal.init({
+                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
+                            safari_web_id: "web.onesignal.auto.xxxxx", 
+                            notifyButton: { enable: true }, 
+                        });
+                    }
+                    await OneSignal.login(user.id);
+                    // Otomatis 'Check In' izin notifikasi (tanpa popup ganggu)
+                    OneSignal.User.PushSubscription.optIn();
                 });
-                
-                await OneSignal.login(user.id);
-                
-                // Cek status subscribe
-                setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
-                
-                OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
-                    setIsSubscribed(event.current.optedIn);
-                });
-            });
+            }
         }
+        // -----------------------------------------------------------
 
         // 2. Ambil Data Toko Lama
         const { data: campaignsData, error: campError } = await supabase
@@ -232,18 +236,7 @@ export default function Dashboard() {
      }
   };
 
-  const handleSubscribe = () => {
-    if (typeof window !== "undefined") {
-        const w = window as any; // 👈 Pake jurus 'any' lagi disini
-        if (w.OneSignal) {
-            w.OneSignal.Slidedown.promptPush();
-        } else {
-            alert("OneSignal belum siap. Refresh halaman.");
-        }
-    }
-  };
-
-  // --- TAMPILAN UI (SAMA PERSIS, GAK DIUBAH) ---
+  // --- TAMPILAN UI ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -284,60 +277,45 @@ export default function Dashboard() {
                 </Link>
             </div>
 
-            {/* NOTIFICATION BOX */}
+            {/* 🔥 TAMPILAN NOTIFIKASI (YANG DIUBAH: LANGSUNG TOMBOL TES) 🔥 */}
             <div className="bg-white/50 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-amber-500/20 rounded-3xl p-6 relative overflow-hidden group shadow-sm">
                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                    <div className="flex items-start gap-4">
-                       <div className={`p-3 rounded-xl border ${isSubscribed ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                           {isSubscribed ? <Check size={24} /> : <BellRing size={24} className={isSubscribed ? "" : "animate-pulse"} />}
+                       <div className="p-3 rounded-xl border bg-green-500/10 text-green-500 border-green-500/20">
+                           <BellRing size={24} />
                        </div>
                        <div>
                            <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                                Service Recovery System
-                               {isSubscribed ? (
-                                   <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold uppercase">Connected</span>
-                               ) : (
-                                   <span className="text-[10px] bg-zinc-500 text-white px-2 py-0.5 rounded font-bold uppercase">Disconnected</span>
-                               )}
+                               <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold uppercase">Ready</span>
                            </h3>
                            <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 max-w-lg">
-                               {isSubscribed 
-                                ? "Notifikasi aktif! HP lu bakal bunyi kalau ada review masuk." 
-                                : "Klik tombol 'Aktifkan Notif' biar gak ketinggalan komplain customer!"}
+                               Sistem notifikasi standby. Klik tombol tes untuk cek bunyi di HP.
                            </p>
                        </div>
                    </div>
 
+                   {/* TOMBOL TES LANGSUNG MUNCUL */}
                    <div className="flex gap-3 w-full md:w-auto">
-                      {!isSubscribed ? (
-                          <button 
-                            onClick={handleSubscribe}
-                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-zinc-900 text-white dark:bg-white dark:text-black px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 shadow-lg"
-                          >
-                            <Bell size={16}/> Aktifkan Notif
-                          </button>
-                      ) : (
-                          <>
-                              <button 
-                                onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
-                                disabled={isSendingNotif}
-                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
-                              >
-                                {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "😡 Tes Bahaya"}
-                              </button>
-                              <button 
-                                onClick={() => handleTestNotification(5, "AMAN (⭐5)")}
-                                disabled={isSendingNotif}
-                                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-500 border border-green-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
-                              >
-                                {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "🌟 Tes Aman"}
-                              </button>
-                          </>
-                      )}
+                        <button 
+                        onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
+                        disabled={isSendingNotif}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                        >
+                        {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "😡 Tes Bahaya"}
+                        </button>
+                        <button 
+                        onClick={() => handleTestNotification(5, "AMAN (⭐5)")}
+                        disabled={isSendingNotif}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-500 border border-green-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
+                        >
+                        {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "🌟 Tes Aman"}
+                        </button>
                    </div>
                </div>
             </div>
 
+            {/* SISA KODE KE BAWAH PERSIS SAMA DENGAN PUNYA LU (STATISTIK, PROJECT, DLL) */}
             {/* STATISTIK */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
