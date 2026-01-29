@@ -44,7 +44,6 @@ export default function Dashboard() {
   useEffect(() => {
     let isMounted = true;
 
-    // Safety Timer (Biar gak loading selamanya)
     const safetyTimer = setTimeout(() => {
         if (isMounted && loading) {
             setLoading(false);
@@ -65,44 +64,43 @@ export default function Dashboard() {
         }
 
         // -------------------------------------------------------------
-        // 🚀 FIX ONESIGNAL: CEK STATUS TANPA RE-INIT BERULANG 🚀
+        // 🚀 FIX 1: ONESIGNAL PINTAR (GAK NANYA MULU) 🚀
         // -------------------------------------------------------------
         if (typeof window !== "undefined") {
             const w = window as any; 
             
-            // Fungsi buat update status React State
-            const updateOneSignalState = (OS: any) => {
-                if (OS.User && OS.User.PushSubscription) {
-                    setIsSubscribed(OS.User.PushSubscription.optedIn);
-                    OS.User.PushSubscription.addEventListener("change", (event: any) => {
-                        setIsSubscribed(event.current.optedIn);
-                    });
-                }
-            };
-
-            // Skenario A: OneSignal SUDAH Ready (Misal dari halaman sebelumnya)
+            // Cek dulu: Udah jalan belum?
             if (w.OneSignal && w.OneSignal.initialized) {
-                console.log("✅ OneSignal sudah aktif, sync status aja.");
-                w.OneSignal.login(user.id);
-                updateOneSignalState(w.OneSignal);
-            } 
-            // Skenario B: OneSignal BELUM Ready (Baru refresh page)
-            else {
+                console.log("✅ OneSignal sudah aktif, skip init.");
+                if (isMounted) {
+                    w.OneSignal.login(user.id);
+                    // Update status tombol
+                    if (w.OneSignal.User && w.OneSignal.User.PushSubscription) {
+                        setIsSubscribed(w.OneSignal.User.PushSubscription.optedIn);
+                    }
+                }
+            } else {
+                // Kalau belum, baru kita jalankan antrian
                 w.OneSignalDeferred = w.OneSignalDeferred || [];
                 w.OneSignalDeferred.push(async function (OneSignal: any) {
                     if (!OneSignal.initialized) {
                         await OneSignal.init({
-                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID || "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
+                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
                             safari_web_id: "web.onesignal.auto.xxxxx", 
                             notifyButton: { enable: true }, 
                         });
                     }
                     await OneSignal.login(user.id);
-                    updateOneSignalState(OneSignal);
+                    
+                    if (isMounted) {
+                        setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
+                        OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
+                            setIsSubscribed(event.current.optedIn);
+                        });
+                    }
                 });
             }
         }
-        // -------------------------------------------------------------
 
         // 2. Ambil Data Toko Lama
         const { data: campaignsData, error: campError } = await supabase
@@ -120,11 +118,14 @@ export default function Dashboard() {
             .eq("id", user.id)
             .single();
 
-        let finalCampaigns = campaignsData || [];
-
-        // 🔥 LOGIKA PENYELAMAT QR CODE (TETAP ADA) 🔥
-        finalCampaigns = finalCampaigns.map((c: any) => ({
+        // -------------------------------------------------------------
+        // 🚀 FIX 2: PENYELAMAT QR CODE (ANTI BUNTUNG) 🚀
+        // Kita bersihin data dari DB. Kalau slug kosong, kita buatin manual.
+        // -------------------------------------------------------------
+        let rawCampaigns = campaignsData || [];
+        let finalCampaigns = rawCampaigns.map((c: any) => ({
             ...c,
+            // Logic Sakti: Kalau slug null/kosong, pake nama brand (kecil semua + strip)
             slug: (c.slug && c.slug.length > 1) 
                   ? c.slug 
                   : c.brand_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
@@ -135,6 +136,7 @@ export default function Dashboard() {
                 id: profileData.id,
                 user_id: profileData.id,
                 brand_name: profileData.business_name,
+                // Pastikan Profile juga punya fallback slug
                 slug: profileData.slug || profileData.business_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
                 visits: profileData.visits || 0,
                 clicks: profileData.clicks || 0,
@@ -150,7 +152,7 @@ export default function Dashboard() {
         if (isMounted) {
           setCampaigns(finalCampaigns);
 
-          // 4. HITUNG STATISTIK
+          // 4. HITUNG STATISTIK (Sama kayak dulu)
           const campaignIds = finalCampaigns.map((c: any) => c.id);
           let totalRev = 0, happy = 0, sad = 0;
           let visits = 0, clicks = 0;
@@ -197,11 +199,8 @@ export default function Dashboard() {
   }, [router]);
 
   // --- HELPER FUNCTIONS ---
-  const copyToClipboard = (slug: string, brandName: string, id: string) => {
-    // Logic Penyelamat Link di Tombol Copy
-    const safeSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-    const url = `${window.location.origin}/${safeSlug}`;
-    
+  const copyToClipboard = (slug: string, id: string) => {
+    const url = `${window.location.origin}/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
@@ -214,12 +213,8 @@ export default function Dashboard() {
 
   const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
     setDownloadingId(id);
-    // Logic Penyelamat Link di Tombol Download
-    const safeSlug = (slug && slug.length > 1) ? slug : brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-    const fullUrl = `${window.location.origin}/${safeSlug}`;
-
     try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`;
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`;
         const response = await fetch(qrUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -231,7 +226,8 @@ export default function Dashboard() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
     } catch (error) {
-        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${fullUrl}`, '_blank');
+        console.error("Gagal download:", error);
+        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
     } finally {
         setDownloadingId(null);
     }
@@ -267,7 +263,7 @@ export default function Dashboard() {
         if (w.OneSignal) {
             w.OneSignal.User.PushSubscription.optIn();
         } else {
-            alert("OneSignal belum siap. Refresh halaman.");
+            alert("Sistem notifikasi belum siap. Tunggu sebentar dan coba lagi.");
         }
     }
   };
@@ -487,14 +483,18 @@ export default function Dashboard() {
                                         <h3 className="font-extrabold text-2xl text-zinc-900 dark:text-white group-hover:text-amber-500 transition duration-300">{camp.brand_name}</h3>
                                         <span className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-green-500/20">Active</span>
                                     </div>
-                                    <a href={`/${camp.slug}`} target="_blank" className="text-zinc-500 text-sm hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition">
-                                        <ExternalLink size={14}/> reviewboost.id/{camp.slug}
-                                    </a>
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-xs text-zinc-400">Slug: <span className="font-mono text-amber-500">{camp.slug || "ERROR: NO SLUG"}</span></p>
+                                        <a href={`/${camp.slug}`} target="_blank" className="text-zinc-500 text-sm hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition">
+                                            <ExternalLink size={14}/> 
+                                            {typeof window !== 'undefined' ? window.location.host : ''}/{camp.slug}
+                                        </a>
+                                    </div>
                                 </div>
                                 
                                 <div className="flex gap-2 w-full md:w-auto">
                                     <button 
-                                        onClick={() => copyToClipboard(camp.slug, camp.brand_name, camp.id)} 
+                                        onClick={() => copyToClipboard(camp.slug, camp.id)} 
                                         className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-zinc-100 dark:bg-white text-zinc-900 dark:text-black hover:bg-zinc-200 dark:hover:bg-zinc-200 transition shadow-lg shadow-black/5 dark:shadow-white/5 active:scale-95 border border-zinc-200 dark:border-transparent"
                                     >
                                         {copiedId === camp.id ? <Check size={16} className="text-green-600"/> : <Copy size={16}/>} 
