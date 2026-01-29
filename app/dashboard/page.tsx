@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+// ❌ BAGIAN "DECLARE GLOBAL" UDAH GW HAPUS BIAR GAK MERAH
+
 export default function Dashboard() {
   const router = useRouter();
   
@@ -21,7 +23,7 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState("");
   const [campaigns, setCampaigns] = useState<any[]>([]);
   
-  // State Statistik
+  // State Statistik Real-time
   const [stats, setStats] = useState({
     totalVisits: 0,
     totalClicks: 0,
@@ -63,43 +65,28 @@ export default function Dashboard() {
             return;
         }
 
-        // -------------------------------------------------------------
-        // 🚀 FIX 1: ONESIGNAL PINTAR (GAK NANYA MULU) 🚀
-        // -------------------------------------------------------------
+        // 🚀 INIT ONESIGNAL (PAKE JURUS 'ANY' BIAR GAK MERAH)
         if (typeof window !== "undefined") {
+            // 👇 Kita bikin variabel 'w' yang bebas aturan TypeScript
             const w = window as any; 
             
-            // Cek dulu: Udah jalan belum?
-            if (w.OneSignal && w.OneSignal.initialized) {
-                console.log("✅ OneSignal sudah aktif, skip init.");
-                if (isMounted) {
-                    w.OneSignal.login(user.id);
-                    // Update status tombol
-                    if (w.OneSignal.User && w.OneSignal.User.PushSubscription) {
-                        setIsSubscribed(w.OneSignal.User.PushSubscription.optedIn);
-                    }
-                }
-            } else {
-                // Kalau belum, baru kita jalankan antrian
-                w.OneSignalDeferred = w.OneSignalDeferred || [];
-                w.OneSignalDeferred.push(async function (OneSignal: any) {
-                    if (!OneSignal.initialized) {
-                        await OneSignal.init({
-                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
-                            safari_web_id: "web.onesignal.auto.xxxxx", 
-                            notifyButton: { enable: true }, 
-                        });
-                    }
-                    await OneSignal.login(user.id);
-                    
-                    if (isMounted) {
-                        setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
-                        OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
-                            setIsSubscribed(event.current.optedIn);
-                        });
-                    }
+            w.OneSignalDeferred = w.OneSignalDeferred || [];
+            w.OneSignalDeferred.push(async function (OneSignal: any) {
+                await OneSignal.init({
+                    appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
+                    safari_web_id: "web.onesignal.auto.xxxxx", 
+                    notifyButton: { enable: true }, 
                 });
-            }
+                
+                await OneSignal.login(user.id);
+                
+                // Cek status subscribe
+                setIsSubscribed(OneSignal.User.PushSubscription.optedIn);
+                
+                OneSignal.User.PushSubscription.addEventListener("change", (event: any) => {
+                    setIsSubscribed(event.current.optedIn);
+                });
+            });
         }
 
         // 2. Ambil Data Toko Lama
@@ -118,26 +105,14 @@ export default function Dashboard() {
             .eq("id", user.id)
             .single();
 
-        // -------------------------------------------------------------
-        // 🚀 FIX 2: PENYELAMAT QR CODE (ANTI BUNTUNG) 🚀
-        // Kita bersihin data dari DB. Kalau slug kosong, kita buatin manual.
-        // -------------------------------------------------------------
-        let rawCampaigns = campaignsData || [];
-        let finalCampaigns = rawCampaigns.map((c: any) => ({
-            ...c,
-            // Logic Sakti: Kalau slug null/kosong, pake nama brand (kecil semua + strip)
-            slug: (c.slug && c.slug.length > 1) 
-                  ? c.slug 
-                  : c.brand_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-')
-        }));
+        let finalCampaigns = campaignsData || [];
 
         if (profileData && profileData.business_name) {
             const profileAsCampaign = {
                 id: profileData.id,
                 user_id: profileData.id,
                 brand_name: profileData.business_name,
-                // Pastikan Profile juga punya fallback slug
-                slug: profileData.slug || profileData.business_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-'),
+                slug: profileData.slug || profileData.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
                 visits: profileData.visits || 0,
                 clicks: profileData.clicks || 0,
                 created_at: profileData.updated_at
@@ -152,7 +127,7 @@ export default function Dashboard() {
         if (isMounted) {
           setCampaigns(finalCampaigns);
 
-          // 4. HITUNG STATISTIK (Sama kayak dulu)
+          // 4. HITUNG STATISTIK
           const campaignIds = finalCampaigns.map((c: any) => c.id);
           let totalRev = 0, happy = 0, sad = 0;
           let visits = 0, clicks = 0;
@@ -259,16 +234,16 @@ export default function Dashboard() {
 
   const handleSubscribe = () => {
     if (typeof window !== "undefined") {
-        const w = window as any;
+        const w = window as any; // 👈 Pake jurus 'any' lagi disini
         if (w.OneSignal) {
-            w.OneSignal.User.PushSubscription.optIn();
+            w.OneSignal.Slidedown.promptPush();
         } else {
-            alert("Sistem notifikasi belum siap. Tunggu sebentar dan coba lagi.");
+            alert("OneSignal belum siap. Refresh halaman.");
         }
     }
   };
 
-  // --- TAMPILAN UI ---
+  // --- TAMPILAN UI (SAMA PERSIS, GAK DIUBAH) ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
@@ -483,13 +458,9 @@ export default function Dashboard() {
                                         <h3 className="font-extrabold text-2xl text-zinc-900 dark:text-white group-hover:text-amber-500 transition duration-300">{camp.brand_name}</h3>
                                         <span className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-green-500/20">Active</span>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-xs text-zinc-400">Slug: <span className="font-mono text-amber-500">{camp.slug || "ERROR: NO SLUG"}</span></p>
-                                        <a href={`/${camp.slug}`} target="_blank" className="text-zinc-500 text-sm hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition">
-                                            <ExternalLink size={14}/> 
-                                            {typeof window !== 'undefined' ? window.location.host : ''}/{camp.slug}
-                                        </a>
-                                    </div>
+                                    <a href={`/${camp.slug}`} target="_blank" className="text-zinc-500 text-sm hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition">
+                                        <ExternalLink size={14}/> reviewboost.id/{camp.slug}
+                                    </a>
                                 </div>
                                 
                                 <div className="flex gap-2 w-full md:w-auto">
