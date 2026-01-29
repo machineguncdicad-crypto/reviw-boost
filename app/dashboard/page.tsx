@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // STATE NOTIF
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const [isSendingNotif, setIsSendingNotif] = useState(false);
 
   // --- LOGIKA UTAMA ---
@@ -62,14 +63,18 @@ export default function Dashboard() {
             return;
         }
 
-        // 🚀 INIT ONESIGNAL (AUTO SILENT START) 🚀
+        // ---------------------------------------------------------
+        // 🔥 BAGIAN YANG DIUBAH: LOGIKA ONESIGNAL BIAR GAK RESET 🔥
+        // ---------------------------------------------------------
         if (typeof window !== "undefined") {
             const w = window as any; 
             
-            // Cek kalau sudah ada, gak usah init ulang (Biar gak ngereset)
+            // Cek: Apakah OneSignal SUDAH jalan?
             if (w.OneSignal && w.OneSignal.initialized) {
-                 w.OneSignal.login(user.id);
+                // Kalo udah jalan, Login aja. Gak usah Init ulang.
+                w.OneSignal.login(user.id);
             } else {
+                // Kalo belum jalan, baru kita jalanin
                 w.OneSignalDeferred = w.OneSignalDeferred || [];
                 w.OneSignalDeferred.push(async function (OneSignal: any) {
                     if (!OneSignal.initialized) {
@@ -79,10 +84,13 @@ export default function Dashboard() {
                             notifyButton: { enable: true }, 
                         });
                     }
+                    // Login user & Otomatis minta izin kalau belum
                     await OneSignal.login(user.id);
+                    OneSignal.User.PushSubscription.optIn(); 
                 });
             }
         }
+        // ---------------------------------------------------------
 
         // 2. Ambil Data Toko Lama
         const { data: campaignsData, error: campError } = await supabase
@@ -227,6 +235,17 @@ export default function Dashboard() {
      }
   };
 
+  const handleSubscribe = () => {
+    if (typeof window !== "undefined") {
+        const w = window as any;
+        if (w.OneSignal) {
+            w.OneSignal.User.PushSubscription.optIn();
+        } else {
+            alert("Sistem notifikasi belum siap. Tunggu sebentar dan coba lagi.");
+        }
+    }
+  };
+
   // --- TAMPILAN UI ---
   if (loading) return (
     <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
@@ -268,7 +287,7 @@ export default function Dashboard() {
                 </Link>
             </div>
 
-            {/* NOTIFICATION BOX (SIMPLE MODE: SELALU SIAP) */}
+            {/* 🔥 BAGIAN YANG DIUBAH: NOTIFICATION BOX SIMPLE 🔥 */}
             <div className="bg-white/50 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-amber-500/20 rounded-3xl p-6 relative overflow-hidden group shadow-sm">
                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                    <div className="flex items-start gap-4">
@@ -281,12 +300,12 @@ export default function Dashboard() {
                                <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold uppercase">Ready</span>
                            </h3>
                            <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 max-w-lg">
-                               Sistem notifikasi aktif. Klik tombol di kanan buat ngetes apakah notifikasi masuk ke HP lu.
+                               Sistem notifikasi aktif. Klik tombol di kanan untuk tes notifikasi ke HP.
                            </p>
                        </div>
                    </div>
 
-                   {/* LANGSUNG TAMPILIN TOMBOL TEST */}
+                   {/* LANGSUNG MUNCUL TOMBOL TEST (GAK ADA AKTIF/NONAKTIF) */}
                    <div className="flex gap-3 w-full md:w-auto">
                         <button 
                         onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
