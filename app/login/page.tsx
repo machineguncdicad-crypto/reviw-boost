@@ -31,13 +31,15 @@ export default function LoginPage() {
       });
 
       if (error) throw error;
-      router.push("/dashboard"); 
-      router.refresh();
+      
+      // 🔥 FIX DISINI: PAKE WINDOW LOCATION BIAR DATA FRESH 🔥
+      // Ini maksa browser refresh total, jadi data toko langsung kebaca di dashboard.
+      window.location.href = "/dashboard"; 
+
     } catch (error: any) {
       setErrorMsg(error.message || "Gagal login. Cek email/password.");
-    } finally {
       setLoading(false);
-    }
+    } 
   };
 
   // 2. LOGIN GOOGLE
@@ -61,15 +63,11 @@ export default function LoginPage() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"></div>
         
         <div className="relative z-10 max-w-md">
-           {/* 👇 UPDATE: Badge 500+ SUDAH DIHAPUS DI SINI */}
-           
-           {/* 👇 UPDATE: Headline Baru */}
            <h1 className="text-4xl font-black mb-8 leading-tight">
              Ambil Kendali Penuh Atas<br/>
              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Reputasi Bisnis Anda.</span>
            </h1>
            
-           {/* 👇 UPDATE: Checklist Baru */}
            <ul className="space-y-5 text-zinc-300 text-lg">
               <li className="flex items-center gap-4">
                 <div className="p-1 bg-amber-500/10 rounded-full"><CheckCircle2 className="text-amber-500" size={20}/></div>
