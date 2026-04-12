@@ -30,7 +30,9 @@ const translations: any = {
     btn_maps: "Posting di Google Maps",
     footer: "Powered by ReviewBoost",
     store_not_found: "Toko Gak Ketemu",
-    store_check_link: "Coba cek lagi link QR Code-nya ya."
+    store_check_link: "Coba cek lagi link QR Code-nya ya.",
+    // ✅ BARU: Teks consent UU PDP
+    consent_text: "Dengan mengirim, kamu setuju nama & nomor WA kamu disimpan oleh pemilik toko untuk keperluan evaluasi layanan.",
   },
   en: {
     title: "How was your experience?",
@@ -52,7 +54,9 @@ const translations: any = {
     btn_maps: "Post on Google Maps",
     footer: "Powered by ReviewBoost",
     store_not_found: "Store Not Found",
-    store_check_link: "Please check the link."
+    store_check_link: "Please check the link.",
+    // ✅ BARU: Teks consent UU PDP
+    consent_text: "By submitting, you agree that your name and WhatsApp number will be stored by the store owner for service evaluation purposes.",
   }
 };
 
@@ -67,7 +71,6 @@ const colorMap: any = {
 
 export default function PublicReviewPage() {
   const params = useParams();
-  // Handle slug biar gak error kalau undefined
   const slug = params?.slug ? String(params.slug) : "";
 
   const [loading, setLoading] = useState(true);
@@ -75,15 +78,10 @@ export default function PublicReviewPage() {
   const [rating, setRating] = useState(0);
   const [step, setStep] = useState(1); 
   const [feedback, setFeedback] = useState("");
-  
-  // Data Customer (Opsional)
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
-  
-  // DEFAULT SETTING (Kalau user belum setting di dashboard)
   const [minRatingGoogle, setMinRatingGoogle] = useState(4); 
   const [brandColor, setBrandColor] = useState("amber");
   const [language, setLanguage] = useState("id");
@@ -107,12 +105,9 @@ export default function PublicReviewPage() {
             setStore(profile);
             currentStore = profile;
             ownerId = profile.id;
-            
-            // Ambil settingan custom user
             if (profile.min_rating_google) setMinRatingGoogle(profile.min_rating_google);
             if (profile.brand_color) setBrandColor(profile.brand_color);
             if (profile.language) setLanguage(profile.language);
-
         } else {
             // Fallback: Cek Tabel CAMPAIGNS (Toko Lama)
             const { data: camp } = await supabase.from("campaigns").select("*").eq("slug", slug).single();
@@ -123,7 +118,7 @@ export default function PublicReviewPage() {
             }
         }
 
-        // Kalau dapet toko tapi belum dapet settingan (kasus tabel campaigns), ambil settingan dari owner
+        // Ambil settingan dari owner (kasus tabel campaigns)
         if (currentStore && ownerId && !profile) {
             const { data: ownerSettings } = await supabase
                 .from("profiles")
@@ -141,7 +136,6 @@ export default function PublicReviewPage() {
         // Catat Kunjungan (Visit Counter)
         if (currentStore && !hasCountedVisit.current) {
             hasCountedVisit.current = true;
-            // Panggil RPC database biar aman & cepet
             await supabase.rpc('increment_visit', { row_id: currentStore.id });
         }
 
@@ -155,7 +149,7 @@ export default function PublicReviewPage() {
     fetchStore();
   }, [slug]);
 
-  // 2. FUNGSI KIRIM NOTIFIKASI (WA / ONESIGNAL)
+  // 2. FUNGSI KIRIM NOTIFIKASI KE OWNER
   const sendNotification = async (stars: number, text: string, custName: string) => {
     const targetOwnerId = store.user_id || store.id;
     if (!targetOwnerId) return; 
@@ -178,10 +172,9 @@ export default function PublicReviewPage() {
     }
   };
 
-  // 3. LOGIKA RATING
+  // 3. LOGIKA PILIH BINTANG
   const handleRating = (star: number) => {
     setRating(star);
-    // Delay dikit biar animasinya enak
     setTimeout(() => setStep(2), 300);
   };
 
@@ -189,7 +182,6 @@ export default function PublicReviewPage() {
   const submitFeedback = async () => {
     setSending(true);
     
-    // Simpan ke Supabase
     await supabase.from("feedbacks").insert({
         campaign_id: store.id, 
         rating: rating, 
@@ -198,7 +190,6 @@ export default function PublicReviewPage() {
         customer_phone: phone || "-" 
     });
 
-    // Kirim Notif ke Owner
     await sendNotification(rating, feedback, name || "Anonim");
 
     setTimeout(() => { 
@@ -207,21 +198,18 @@ export default function PublicReviewPage() {
     }, 1000);
   };
 
-  // 5. REDIRECT KE GOOGLE MAPS (PENGAMANAN)
+  // 5. REDIRECT KE GOOGLE MAPS
   const handleGoToMaps = () => {
       const url = store.google_map_url;
       if (!url) return;
 
-      // Cek Device (Buka App Maps kalau di HP)
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      
       if (isMobile) {
           window.location.href = url;
       } else {
           window.open(url, '_blank');
       }
 
-      // Catat Klik (Analytics) - Pakai 'void' biar gak nunggu response
       void supabase.rpc('increment_click', { row_id: store.id });
   };
 
@@ -232,13 +220,16 @@ export default function PublicReviewPage() {
       setTimeout(() => setCopied(false), 2000);
   };
 
-  // Tentukan Tema & Bahasa
   const isEligibleForMaps = rating >= minRatingGoogle;
   const theme = colorMap[brandColor] || colorMap.amber;
   const t = translations[language] || translations.id;
 
-  // --- RENDER TAMPILAN ---
-  if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white"><Loader2 className="animate-spin text-amber-500"/></div>;
+  // --- RENDER ---
+  if (loading) return (
+    <div className="min-h-screen bg-black flex items-center justify-center text-white">
+      <Loader2 className="animate-spin text-amber-500"/>
+    </div>
+  );
   
   if (!store) return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-zinc-500 p-6 text-center">
@@ -259,7 +250,7 @@ export default function PublicReviewPage() {
             <div className="text-center z-10 animate-in zoom-in-95 w-full max-w-sm">
                 <div className={`w-24 h-24 bg-zinc-900 border-2 rounded-full flex items-center justify-center mx-auto mb-8 shadow-2xl overflow-hidden ${theme.border}`}>
                     {store.avatar_url ? (
-                        <img src={store.avatar_url} className="w-full h-full object-cover"/>
+                        <img src={store.avatar_url} className="w-full h-full object-cover" alt={store.business_name}/>
                     ) : (
                         <MapPin size={32} className={theme.text}/>
                     )}
@@ -295,7 +286,7 @@ export default function PublicReviewPage() {
                 <div className="space-y-4 bg-zinc-900/50 backdrop-blur-md p-6 rounded-3xl border border-zinc-800/50 shadow-xl">
                     <textarea 
                         value={feedback} 
-                        onChange={e=>setFeedback(e.target.value)} 
+                        onChange={e => setFeedback(e.target.value)} 
                         placeholder={isEligibleForMaps ? t.placeholder_good : t.placeholder_bad} 
                         className={`w-full h-32 bg-black/50 border border-zinc-700 rounded-xl p-4 text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 transition-all resize-none text-sm ${theme.ring}`} 
                         autoFocus
@@ -324,6 +315,11 @@ export default function PublicReviewPage() {
                         </div>
                     </div>
 
+                    {/* ✅ CONSENT TEXT - Comply UU PDP Indonesia */}
+                    <p className="text-[10px] text-zinc-600 text-center leading-relaxed px-2">
+                        {t.consent_text}
+                    </p>
+
                     <button 
                         onClick={submitFeedback} 
                         disabled={sending} 
@@ -340,12 +336,11 @@ export default function PublicReviewPage() {
             </div>
         )}
 
-        {/* STEP 3: FINAL SCREEN (FILTERING) */}
+        {/* STEP 3: FINAL SCREEN */}
         {step === 3 && (
             <div className="text-center z-10 animate-in zoom-in-95 w-full max-w-sm">
                 
                 {isEligibleForMaps ? (
-                    // SKENARIO HAPPY: DORONG KE GOOGLE MAPS
                     <>
                         <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${theme.light}`}>
                             <CheckCircle2 size={48} className={theme.text}/>
@@ -355,7 +350,6 @@ export default function PublicReviewPage() {
                         
                         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
                             <div className={`absolute top-0 left-0 w-full h-1 ${theme.bg}`}></div>
-                            
                             <p className="text-white font-bold mb-1">{t.help_ask}</p>
                             <p className="text-zinc-500 text-xs mb-6">{t.help_desc}</p>
                             
@@ -372,14 +366,13 @@ export default function PublicReviewPage() {
                         </div>
                     </>
                 ) : (
-                    // SKENARIO BAD: TAMPUNG INTERNAL AJA
                     <div className="bg-zinc-900/80 p-8 rounded-3xl border border-zinc-800">
                         <div className="w-20 h-20 bg-black border border-zinc-800 rounded-full flex items-center justify-center mx-auto mb-6">
                             <MessageCircle size={32} className="text-zinc-400"/>
                         </div>
                         <h2 className="text-2xl font-bold text-white mb-2">{t.thank_internal_title}</h2>
                         <p className="text-zinc-400 mt-2 text-sm leading-relaxed">{t.thank_internal_desc}</p>
-                        <button onClick={()=>window.location.reload()} className={`mt-8 text-sm font-bold hover:underline ${theme.text}`}>
+                        <button onClick={() => window.location.reload()} className={`mt-8 text-sm font-bold hover:underline ${theme.text}`}>
                             Kembali ke Awal
                         </button>
                     </div>
