@@ -24,6 +24,7 @@
     "react-onesignal": "^3.4.4",
     "react-qr-code": "^2.0.18",
     "recharts": "^3.6.0",
+    "resend": "^6.10.0",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
