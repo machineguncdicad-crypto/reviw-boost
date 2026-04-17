@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { 
   Mail, Lock, Eye, EyeOff, Loader2, 
-  ArrowRight, Rocket, Store 
+  ArrowRight, Rocket, Store, Gift
 } from "lucide-react";
 
 export default function RegisterPage() {
@@ -19,7 +19,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // --- 1. FUNGSI BARU: DAFTAR PAKE GOOGLE ---
+  // --- 1. DAFTAR PAKE GOOGLE ---
   const handleGoogleSignUp = async () => {
     setLoading(true);
     try {
@@ -30,13 +30,13 @@ export default function RegisterPage() {
         },
       });
       if (error) throw error;
-      // Gak perlu alert/router push karena otomatis redirect ke Google
     } catch (error: any) {
       setErrorMsg(error.message);
       setLoading(false);
     }
   };
 
+  // --- 2. DAFTAR PAKE EMAIL ---
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault(); 
     setLoading(true);
@@ -49,6 +49,7 @@ export default function RegisterPage() {
     }
 
     try {
+      // Step 1: Buat akun di Supabase Auth
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -60,8 +61,30 @@ export default function RegisterPage() {
       });
 
       if (error) throw error;
-      
-      alert("🎉 SIAP! Akun berhasil dibuat. Cek email untuk verifikasi!");
+      if (!data.user) throw new Error("Gagal membuat akun.");
+
+      // ✅ Step 2: Aktifkan Free Trial 14 Hari otomatis
+      const trialEndDate = new Date();
+      trialEndDate.setDate(trialEndDate.getDate() + 14);
+
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .upsert({
+            id: data.user.id,
+            email: email,
+            business_name: brandName,
+            tier_name: "PRO",                              // Trial dapat akses PRO
+            subscription_status: "trial",                  // Status khusus trial
+            subscription_end_date: trialEndDate.toISOString(), // Expired 14 hari
+            updated_at: new Date().toISOString(),
+        });
+
+      if (profileError) {
+          console.error("Gagal set trial:", profileError);
+          // Tetap lanjut walau profile gagal, jangan block user
+      }
+
+      alert("🎉 Selamat! Akun berhasil dibuat.\n\n✨ Kamu dapat FREE TRIAL PRO selama 14 hari!\n\nCek email untuk verifikasi.");
       router.push("/login");
 
     } catch (error: any) {
@@ -76,30 +99,31 @@ export default function RegisterPage() {
       
       {/* --- BAGIAN KIRI: VISUAL (DESKTOP) --- */}
       <div className="hidden lg:flex w-1/2 bg-zinc-900 relative items-center justify-center p-12 overflow-hidden">
-        {/* Efek Background Emas */}
         <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
         <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"></div>
         
         <div className="relative z-10 max-w-md">
            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-700 bg-zinc-800/50 mb-6">
-              {/* 👇 ICON JADI EMAS */}
               <Rocket size={14} className="fill-amber-500 text-amber-500" /> 
               <span className="text-xs font-bold tracking-wide text-zinc-300">MULAI GRATIS SEKARANG</span>
            </div>
            <h1 className="text-4xl font-black mb-6 leading-tight">
               Siap Meledakkan <br/>
-              {/* 👇 GRADIENT TEXT JADI EMAS */}
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Omzet Bisnismu?</span>
            </h1>
            <p className="text-zinc-400 mb-8 leading-relaxed">
-           Bergabunglah dengan pebisnis cerdas yang mengambil kendali penuh atas reputasi digital mereka.
+              Bergabunglah dengan pebisnis cerdas yang mengambil kendali penuh atas reputasi digital mereka.
            </p>
            
-           {/* Mini Stats */}
-           <div className="flex gap-8 border-t border-zinc-800 pt-8">
-              <div>
-                 
+           {/* ✅ Badge Free Trial */}
+           <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
+              <div className="flex items-center gap-3 mb-3">
+                  <Gift size={20} className="text-amber-500"/>
+                  <span className="font-black text-amber-500">FREE TRIAL 14 HARI</span>
               </div>
+              <p className="text-zinc-400 text-sm leading-relaxed">
+                  Coba semua fitur PRO gratis selama 14 hari. Tidak perlu kartu kredit.
+              </p>
            </div>
         </div>
       </div>
@@ -122,6 +146,12 @@ export default function RegisterPage() {
                 </div>
                 <h2 className="text-3xl font-bold">Buat Akun Baru</h2>
                 <p className="text-zinc-500 mt-2">Daftar dalam 30 detik. Gratis tanpa kartu kredit.</p>
+                
+                {/* ✅ Badge Trial di Mobile */}
+                <div className="lg:hidden mt-4 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl w-fit">
+                    <Gift size={14} className="text-amber-500"/>
+                    <span className="text-amber-500 text-xs font-bold">FREE TRIAL PRO 14 HARI</span>
+                </div>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-6">
@@ -137,7 +167,6 @@ export default function RegisterPage() {
                             placeholder="Contoh: Kopi Senja"
                             value={brandName}
                             onChange={(e) => setBrandName(e.target.value)}
-                            // 👇 RING FOCUS JADI EMAS
                             className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition text-white placeholder:text-zinc-600"
                         />
                     </div>
@@ -154,7 +183,6 @@ export default function RegisterPage() {
                             placeholder="bos@reviewboost.id"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            // 👇 RING FOCUS JADI EMAS
                             className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition text-white placeholder:text-zinc-600"
                         />
                     </div>
@@ -172,7 +200,6 @@ export default function RegisterPage() {
                             minLength={6}
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            // 👇 RING FOCUS JADI EMAS
                             className="w-full pl-10 pr-12 py-3 bg-zinc-900 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 transition text-white placeholder:text-zinc-600"
                         />
                         <button 
@@ -192,18 +219,18 @@ export default function RegisterPage() {
                     </div>
                 )}
 
-                {/* Submit Button (JADI GRADIENT EMAS BIAR MENTERENG) */}
+                {/* Submit Button */}
                 <button 
                     type="submit" 
                     disabled={loading}
                     className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-bold rounded-xl transition shadow-[0_0_20px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:cursor-wait flex items-center justify-center gap-2"
                 >
-                    {loading ? <Loader2 className="animate-spin" size={20}/> : "Daftar Sekarang"}
+                    {loading ? <Loader2 className="animate-spin" size={20}/> : "Mulai Trial Gratis 14 Hari"}
                     {!loading && <ArrowRight size={18}/>}
                 </button>
             </form>
 
-            {/* --- 2. DIVIDER & GOOGLE BUTTON (DITAMBAHIN DISINI) --- */}
+            {/* DIVIDER & GOOGLE BUTTON */}
             <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
                     <span className="w-full border-t border-zinc-800"></span>
@@ -219,32 +246,18 @@ export default function RegisterPage() {
                 disabled={loading}
                 className="w-full flex items-center justify-center gap-3 bg-white text-zinc-900 font-semibold py-3.5 px-4 rounded-xl hover:bg-zinc-200 transition duration-200"
             >
-                 <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                        fill="#4285F4"
-                    />
-                    <path
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                        fill="#34A853"
-                    />
-                    <path
-                        d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.95l3.66-2.84z"
-                        fill="#FBBC05"
-                    />
-                    <path
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                        fill="#EA4335"
-                    />
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.11c-.22-.66-.35-1.36-.35-2.11s.13-1.45.35-2.11V7.05H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.95l3.66-2.84z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.05l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                 </svg>
                 Google
             </button>
-            {/* ----------------------------------------------------- */}
 
             <div className="text-center pt-2">
                 <p className="text-zinc-500 text-sm">
                     Sudah punya akun?{" "}
-                    {/* 👇 LINK HOVER JADI EMAS */}
                     <Link href="/login" className="text-white font-bold hover:underline decoration-amber-500 underline-offset-4">
                         Login Disini
                     </Link>
