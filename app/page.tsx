@@ -280,7 +280,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="py-10 border-t border-white/5 text-center text-zinc-600 text-sm">
-        <p>&copy; 2024 ReviewBoost Indonesia. Dibuat untuk Pemenang.</p>
+      <p>&copy; {new Date().getFullYear()} ReviewBoost Indonesia. Dibuat untuk Pemenang. · <a href="/privacy" className="hover:text-zinc-400 transition">Privasi</a> · <a href="/terms" className="hover:text-zinc-400 transition">Syarat & Ketentuan</a></p>
       </footer>
 
     </div>
