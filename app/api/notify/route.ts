@@ -1,50 +1,73 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios'; 
+import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
+
+// Pakai Service Role Key biar backend punya akses full ngecek database dengan aman
+const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { rating, comment, brand_name, customer_name, phone } = body;
+    const { rating, comment, brand_name, customer_name, phone, owner_id } = body;
 
-    // 👇 PANGGIL DARI .ENV (JANGAN DITULIS DISINI LAGI)
-    // Pastikan nama variabel ini SAMA PERSIS dengan di .env.local dan Vercel
     const APP_ID = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
     const API_KEY = process.env.ONESIGNAL_REST_API_KEY;
 
-    // Cek dulu kuncinya ada gak (buat debugging di Logs Vercel)
     if (!APP_ID || !API_KEY) {
-        console.error("❌ Gawat! Kunci API atau App ID belum di-setting di .env");
-        return NextResponse.json({ success: false, error: "Server Configuration Error" }, { status: 500 });
+        console.error("❌ Kunci API belum di-setting");
+        return NextResponse.json({ success: false, error: "Server Error" }, { status: 500 });
     }
 
-    console.log("🚀 [SERVER] Siap kirim notif...");
+    // --- 1. PROTEKSI API: VALIDASI KE DATABASE ---
+    // Jangan asal telan request. Pastikan owner_id ini beneran ada dan terdaftar di DB lu!
+    if (!owner_id) {
+        return NextResponse.json({ success: false, error: "Missing owner_id" }, { status: 400 });
+    }
 
+    const { data: owner, error: dbError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, subscription_status')
+        .eq('id', owner_id)
+        .single();
+
+    if (dbError || !owner) {
+        console.warn(`🚨 Seseorang mencoba nembak API dengan owner_id palsu: ${owner_id}`);
+        return NextResponse.json({ success: false, error: "Invalid Owner ID" }, { status: 403 });
+    }
+
+    console.log(`🚀 [SERVER] Memproses notif untuk Owner: ${owner.id}`);
+
+    // --- 2. FORMAT PESAN ---
     const isHappy = rating >= 4;
     const title = isHappy 
         ? `⭐ Review Bintang ${rating} di ${brand_name}!` 
         : `⚠️ Komplain Bintang ${rating} di ${brand_name}`;
     
-    const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})
-💬 "${comment || '-'}"`;
+    const messageContent = `👤 ${customer_name || 'Anonim'} (${phone || '-'})\n💬 "${comment || '-'}"`;
 
-    // 📦 PAKET DATA
+    // --- 3. TARGET SPESIFIK ONESIGNAL ---
     const payload = {
       app_id: APP_ID,
-      // Target: Kirim ke SEMUA yang subscribe (Testing)
-      included_segments: ["Total Subscriptions"], 
+      // ✅ BENAR: Gunakan 'include_aliases' untuk menembak spesifik ke ID Supabase User
+      include_aliases: {
+          external_id: [owner_id] 
+      },
       target_channel: "push",
       headings: { en: title },
       contents: { en: messageContent }
     };
 
-    // 🔫 TEMBAK PAKE AXIOS
+    // Tembak pake Axios
     const response = await axios.post(
       'https://api.onesignal.com/notifications',
       payload,
       {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Key ${API_KEY}` // Kunci masuk sini otomatis
+          'Authorization': `Basic ${API_KEY}` // Ingat: OneSignal REST API pakai format Basic, bukan Key.
         }
       }
     );
