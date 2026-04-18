@@ -1,527 +1,327 @@
-"use client";
+"use client"; // 👈 WAJIB ADA DI PALING ATAS
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-import { 
-  BarChart3, Star, ExternalLink, 
-  Copy, Check, TrendingUp, MousePointer2, 
-  QrCode, Plus, ScanLine, Download, 
-  AlertCircle, X, ThumbsUp, ArrowLeft, Zap, 
-  BellRing, Rocket, Loader2 
-} from "lucide-react";
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation"; 
 
-// ✅ 1. KITA DEFINE TIPE DATANYA DISINI BIAR AMAN DARI 'ANY'
-export interface Campaign {
-  id: string;
-  user_id: string;
-  brand_name: string;
-  slug: string;
-  google_map_url?: string;
-  visits?: number;
-  clicks?: number;
-  status?: string;
-  created_at?: string;
-}
+// 🔥 1. IMPORT SUPABASE BIAR BISA CEK LOGIN
+import { supabase } from "@/lib/supabase"; 
 
-export default function Dashboard() {
+import { 
+  Star, Shield, MessageCircle, BarChart3,
+  CheckCircle2, ArrowRight, Play, Sparkles
+} from "lucide-react";
+
+// Pastikan Navbar ada di folder components
+import Navbar from "@/components/Navbar"; 
+
+export default function LandingPage() {
   const router = useRouter();
 
-  // --- STATE MANAGEMENT ---
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
-  
-  // ✅ 2. STATE SEKARANG PAKAI TIPE 'Campaign[]', BUKAN 'any[]'
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  
-  // State Statistik Real-time
-  const [stats, setStats] = useState({
-    totalVisits: 0,
-    totalClicks: 0,
-    totalReviews: 0,
-    happyCustomers: 0, 
-    sadCustomers: 0,   
-  });
-
-  // UI States
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [expandedQrId, setExpandedQrId] = useState<string | null>(null);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-
-  // STATE NOTIF (Cuma butuh status loading kirim aja sekarang)
-  const [isSendingNotif, setIsSendingNotif] = useState(false);
-
-  // --- LOGIKA UTAMA ---
+  // 🔥 2. LOGIKA BARU: AUTO-REDIRECT KE DASHBOARD 🔥
+  // SEMENTARA DIMATIKAN BIAR BISA LIHAT LANDING PAGE SAAT DEVELOPMENT
+  /*
   useEffect(() => {
-    let isMounted = true;
-
-    const safetyTimer = setTimeout(() => {
-        if (isMounted && loading) {
-            setLoading(false);
-            if (!errorMsg) setErrorMsg("Koneksi lambat. Coba refresh ya.");
-        }
-    }, 10000);
-
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        setErrorMsg(""); 
-
-        // 1. Cek User Login
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-            if (isMounted) router.push("/login");
-            return;
-        }
-
-        // -----------------------------------------------------------
-        // 🔥 BAGIAN NOTIFIKASI 🔥
-        // -----------------------------------------------------------
-        if (typeof window !== "undefined") {
-            const w = window as any;
-            if (w.OneSignal && w.OneSignal.initialized) {
-                w.OneSignal.login(user.id);
-            } else {
-                w.OneSignalDeferred = w.OneSignalDeferred || [];
-                w.OneSignalDeferred.push(async function (OneSignal: any) {
-                    if (!OneSignal.initialized) {
-                        await OneSignal.init({
-                            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
-                            safari_web_id: "web.onesignal.auto.xxxxx", 
-                            notifyButton: { enable: true }, 
-                        });
-                    }
-                    await OneSignal.login(user.id);
-                    OneSignal.User.PushSubscription.optIn();
-                });
-            }
-        }
-        // -----------------------------------------------------------
-
-        // 2. Ambil Data Toko Lama
-        const { data: campaignsData, error: campError } = await supabase
-          .from("campaigns")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (campError) throw campError;
-
-        // 3. Ambil Data Toko Baru
-        const { data: profileData } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-        let finalCampaigns: Campaign[] = campaignsData || [];
-
-        if (profileData && profileData.business_name) {
-            const profileAsCampaign: Campaign = {
-                id: profileData.id,
-                user_id: profileData.id,
-                brand_name: profileData.business_name,
-                slug: profileData.slug || profileData.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-                visits: profileData.visits || 0,
-                clicks: profileData.clicks || 0,
-                created_at: profileData.updated_at
-            };
-
-            const exists = finalCampaigns.find((c) => c.id === profileAsCampaign.id);
-            if (!exists) {
-                finalCampaigns = [profileAsCampaign, ...finalCampaigns];
-            }
-        }
-
-        if (isMounted) {
-          setCampaigns(finalCampaigns);
-
-          // 4. HITUNG STATISTIK
-          const campaignIds = finalCampaigns.map((c) => c.id);
-          let totalRev = 0, happy = 0, sad = 0;
-          let visits = 0, clicks = 0;
-
-          finalCampaigns.forEach((c) => {
-              visits += (c.visits || 0);
-              clicks += (c.clicks || 0);
-          });
-
-          if (campaignIds.length > 0) {
-              const { data: feedbacks } = await supabase
-                .from("feedbacks")
-                .select("rating")
-                .in("campaign_id", campaignIds);
-
-              if (feedbacks && feedbacks.length > 0) {
-                  totalRev = feedbacks.length;
-                  
-                  // Dikasih tipe inline buat ngehindarin any
-                  feedbacks.forEach((f: { rating: number }) => {
-                      if (f.rating >= 4) happy++; else sad++;
-                  });
-              }
-          }
-          
-          setStats({
-            totalVisits: visits,
-            totalClicks: clicks,
-            totalReviews: totalRev,
-            happyCustomers: happy,
-            sadCustomers: sad
-          });
-        }
-
-      } catch (err: any) {
-        console.error("Dashboard Error:", err);
-        if (isMounted) setLoading(false);
-      } finally {
-        if (isMounted) setLoading(false);
-        clearTimeout(safetyTimer);
+    const checkUser = async () => {
+      // Cek apakah user sebenernya udah login (punya sesi)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Kalau udah login, langsung lempar ke Dashboard
+      if (session) {
+        console.log("User sudah login, redirect ke dashboard...");
+        router.replace("/dashboard");
       }
+
+      // Dengerin kalau tiba-tiba login berhasil (misal dari redirect URL tadi)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            router.replace("/dashboard");
+        }
+      });
+
+      return () => subscription.unsubscribe();
     };
 
-    fetchData();
-    return () => { isMounted = false; };
+    checkUser();
   }, [router]);
+  */
 
-  // --- HELPER FUNCTIONS ---
-  const copyToClipboard = (slug: string, id: string) => {
-    const url = `${window.location.origin}/${slug}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  // 3️⃣ LOAD SCRIPT MIDTRANS (TETAP SAMA)
+  useEffect(() => {
+    const snapScript = "https://app.midtrans.com/snap/snap.js";
+    const clientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY || "";
+    
+    const script = document.createElement('script');
+    script.src = snapScript;
+    script.setAttribute('data-client-key', clientKey);
+    script.async = true;
+    
+    document.body.appendChild(script);
 
-  const toggleQr = (id: string) => {
-    if (expandedQrId === id) setExpandedQrId(null);
-    else setExpandedQrId(id);
-  };
+    return () => {
+      document.body.removeChild(script);
+    }
+  }, []);
 
-  const handleDownloadQr = async (slug: string, brandName: string, id: string) => {
-    setDownloadingId(id);
+  // 4️⃣ FUNGSI BAYAR (TETAP SAMA)
+  const handleBuy = async (plan: string, price: number) => {
     try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`;
-        const response = await fetch(qrUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `QR-Review-${brandName.replace(/\s+/g, '-')}.png`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    } catch (error) {
-        console.error("Gagal download:", error);
-        window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
-    } finally {
-        setDownloadingId(null);
+        console.log(`Processing buy: ${plan} - ${price}`); 
+        
+        const response = await fetch('/api/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan, price })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            if(response.status === 401) {
+                alert("Eits, Login dulu ya sebelum upgrade! 🔒");
+                router.push('/login');
+                return;
+            }
+            throw new Error(data.error || "Terjadi kesalahan");
+        }
+
+        if ((window as any).snap) {
+            (window as any).snap.pay(data.token, {
+                onSuccess: function(result: any){
+                    alert("🎉 PEMBAYARAN BERHASIL!");
+                    router.push('/dashboard');
+                },
+                onPending: function(result: any){
+                    alert("⏳ Menunggu pembayaran...");
+                },
+                onError: function(result: any){
+                    alert("❌ Pembayaran gagal!");
+                },
+                onClose: function(){
+                    console.log('Popup ditutup tanpa bayar');
+                }
+            });
+        } else {
+            alert("Sistem pembayaran belum siap. Coba refresh halaman.");
+        }
+
+    } catch (err: any) {
+        console.error(err);
+        alert("Gagal memproses transaksi: " + err.message);
     }
   };
 
-  const handleTestNotification = async (rating: number, type: string) => {
-     try {
-        setIsSendingNotif(true);
-        const { data: { user } } = await supabase.auth.getUser();
-
-        await axios.post('/api/notify', {
-            rating: rating,
-            comment: `Ini adalah tes notifikasi ${type}. Semangat codingnya! 🚀`,
-            brand_name: "ReviewBoost Demo",
-            customer_name: "Developer Ganteng",
-            phone: "0812-TES-TES",
-            owner_id: user?.id, 
-            owner_email: user?.email 
-        });
-
-        alert(`✅ Sukses! Cek HP atau Desktop lu. Harusnya ada notif "${type}".`);
-     } catch (error) {
-        console.error("Gagal kirim notif:", error);
-        alert("❌ Gagal kirim notif. Pastikan API Key benar.");
-     } finally {
-        setIsSendingNotif(false);
-     }
-  };
-
-  // --- TAMPILAN UI ---
-  if (loading) return (
-    <div className="h-full flex flex-col items-center justify-center text-zinc-500 gap-4 pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
-        <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="animate-pulse">Lagi sinkron data...</p>
-    </div>
-  );
-
-  if (errorMsg) return (
-    <div className="h-full flex flex-col items-center justify-center text-zinc-900 dark:text-white p-6 text-center pt-20 bg-zinc-50 dark:bg-black transition-colors duration-300">
-        <div className="p-4 rounded-full bg-red-500/10 mb-4 animate-bounce"><AlertCircle size={48} className="text-red-500"/></div>
-        <h2 className="text-2xl font-bold mb-2">Waduh, Ada Gangguan!</h2>
-        <p className="text-zinc-500 mb-6">{errorMsg}</p>
-        <button onClick={() => window.location.reload()} className="bg-zinc-900 text-white dark:bg-white dark:text-black font-bold px-8 py-3 rounded-xl hover:bg-zinc-700 dark:hover:bg-zinc-200 transition">Muat Ulang</button>
-    </div>
-  );
-
   return (
-    <div className="w-full text-zinc-900 dark:text-white font-sans p-4 md:p-8 relative bg-zinc-50 dark:bg-black transition-colors duration-300 min-h-screen">
-        
-        <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-amber-500/10 blur-[120px] rounded-full pointer-events-none z-0"></div>
-        <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-blue-600/10 blur-[120px] rounded-full pointer-events-none z-0"></div>
+    <div className="min-h-screen bg-black text-white font-sans selection:bg-amber-500/30 overflow-x-hidden">
+      
+      <Navbar /> 
 
-        <div className="relative z-10 max-w-7xl mx-auto space-y-10 animate-in fade-in duration-700 pb-20">
+      {/* --- HERO SECTION --- */}
+      <section className="relative pt-24 pb-20 px-6 overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-amber-500/10 blur-[120px] rounded-full pointer-events-none"></div>
 
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 border-b border-zinc-200 dark:border-zinc-800/50 pb-8">
-                <div>
-                    <h1 className="text-4xl font-extrabold text-zinc-900 dark:text-white mb-2">
-                        Dashboard Founder
-                    </h1>
-                    <p className="text-zinc-500 dark:text-zinc-400 font-medium">Pantau reputasi bisnismu secara real-time!</p>
-                </div>
-                <Link 
-                    href="/dashboard/create" 
-                    className="group bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold px-6 py-3 rounded-2xl flex items-center gap-3 transition shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] hover:-translate-y-1"
-                >
-                    <Plus size={20} strokeWidth={3} /> Buat Toko Baru
-                </Link>
-            </div>
-
-            {/* TAMPILAN NOTIFIKASI */}
-            <div className="bg-white/50 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-amber-500/20 rounded-3xl p-6 relative overflow-hidden group shadow-sm">
-               <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                   <div className="flex items-start gap-4">
-                       <div className="p-3 rounded-xl border bg-green-500/10 text-green-500 border-green-500/20">
-                           <BellRing size={24} />
-                       </div>
-                       <div>
-                           <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                               Service Recovery System
-                               <span className="text-[10px] bg-green-500 text-black px-2 py-0.5 rounded font-bold uppercase">Ready</span>
-                           </h3>
-                           <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1 max-w-lg">
-                               Sistem notifikasi standby. Klik tombol tes untuk cek bunyi di HP.
-                           </p>
-                       </div>
-                   </div>
-
-                   <div className="flex gap-3 w-full md:w-auto">
-                        <button 
-                        onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
-                        disabled={isSendingNotif}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-500 border border-red-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
-                        >
-                        {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "😡 Tes Bahaya"}
-                        </button>
-                        <button 
-                        onClick={() => handleTestNotification(5, "AMAN (⭐5)")}
-                        disabled={isSendingNotif}
-                        className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-500 border border-green-500/20 px-5 py-3 rounded-xl font-bold text-sm transition hover:scale-105 active:scale-95 disabled:opacity-50"
-                        >
-                        {isSendingNotif ? <Loader2 size={16} className="animate-spin"/> : "🌟 Tes Aman"}
-                        </button>
-                   </div>
-               </div>
-            </div>
-
-            {/* STATISTIK */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
-                {/* KUNJUNGAN */}
-                <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2rem] relative group hover:border-zinc-300 dark:hover:border-zinc-700 transition duration-500 hover:shadow-2xl hover:shadow-black/10 dark:hover:shadow-black/50 backdrop-blur-sm">
-                    <div className="absolute top-6 right-6 p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-white group-hover:bg-zinc-200 dark:group-hover:bg-zinc-700 transition">
-                        <TrendingUp size={20}/>
-                    </div>
-                    <div className="mt-8">
-                        <div className="text-4xl font-extrabold text-zinc-900 dark:text-white mb-1 group-hover:scale-110 origin-left transition duration-300">{stats.totalVisits}</div>
-                        <p className="text-zinc-500 font-medium text-sm group-hover:text-zinc-600 dark:group-hover:text-zinc-400 transition">Total Kunjungan</p>
-                    </div>
-                    <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full mt-6 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-zinc-400 to-zinc-600 dark:from-white dark:to-zinc-400 w-[60%] rounded-full group-hover:w-[80%] transition-all duration-1000"></div>
-                    </div>
-                </div>
-
-                {/* KLIK */}
-                <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2rem] relative group hover:border-blue-500/30 transition duration-500 hover:shadow-2xl hover:shadow-blue-900/10 backdrop-blur-sm">
-                    <div className="absolute top-6 right-6 p-2 bg-blue-500/10 rounded-lg text-blue-600 dark:text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition">
-                        <MousePointer2 size={20}/>
-                    </div>
-                    <div className="mt-8">
-                        <div className="text-4xl font-extrabold text-zinc-900 dark:text-white mb-1 group-hover:scale-110 origin-left transition duration-300">{stats.totalClicks}</div>
-                        <p className="text-zinc-500 font-medium text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">Total Klik Link</p>
-                    </div>
-                    <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full mt-6 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 w-[40%] rounded-full group-hover:w-[60%] transition-all duration-1000"></div>
-                    </div>
-                </div>
-
-                {/* REVIEW */}
-                <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2rem] relative group hover:border-green-500/30 transition duration-500 hover:shadow-2xl hover:shadow-green-900/10 backdrop-blur-sm">
-                    <div className="absolute top-6 right-6 p-2 bg-green-500/10 rounded-lg text-green-600 dark:text-green-500 group-hover:bg-green-500 group-hover:text-white transition">
-                        <Star size={20}/>
-                    </div>
-                    <div className="mt-8">
-                        <div className="text-4xl font-extrabold text-zinc-900 dark:text-white mb-1 group-hover:scale-110 origin-left transition duration-300">{stats.totalReviews}</div>
-                        <p className="text-zinc-500 font-medium text-sm group-hover:text-green-600 dark:group-hover:text-green-400 transition">Total Review Masuk</p>
-                    </div>
-                    <div className="h-1 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full mt-6 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-green-600 to-green-400 w-[75%] rounded-full group-hover:w-[90%] transition-all duration-1000"></div>
-                    </div>
-                </div>
-            </div>
-
-            {/* INSIGHT PELANGGAN */}
-            <div className="pt-8 pb-4">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
-                        <Zap size={20}/>
-                    </div>
-                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Insight Pelanggan</h2>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* HAPPY */}
-                    <Link href="/dashboard/reviews" className="bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900/50 dark:to-black border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2rem] flex items-center justify-between hover:border-green-500/30 transition duration-500 group relative overflow-hidden backdrop-blur-sm cursor-pointer shadow-sm">
-                        <div className="absolute inset-0 bg-green-500/5 opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-3">
-                                <span className="bg-green-500/10 text-green-600 dark:text-green-500 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Happy Vibes</span>
-                            </div>
-                            <div className="text-5xl font-black text-zinc-900 dark:text-white mb-1 group-hover:text-green-600 dark:group-hover:text-green-400 transition duration-300">{stats.happyCustomers}</div>
-                            <p className="text-zinc-500 font-medium text-sm">Pelanggan Puas (⭐ 4-5)</p>
-                        </div>
-                        <div className="w-20 h-20 rounded-full border-[6px] border-zinc-100 dark:border-zinc-800 border-t-green-500 flex items-center justify-center shadow-xl relative z-10 bg-white dark:bg-black">
-                             <ThumbsUp size={24} className="text-green-600 dark:text-green-500"/>
-                        </div>
-                    </Link>
-
-                    {/* COMPLAINTS */}
-                    <div className="bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-900/50 dark:to-black border border-zinc-200 dark:border-zinc-800 p-8 rounded-[2rem] flex items-center justify-between hover:border-red-500/30 transition duration-500 group relative overflow-hidden backdrop-blur-sm shadow-sm">
-                        <div className="absolute inset-0 bg-red-500/5 opacity-0 group-hover:opacity-100 transition duration-500"></div>
-                        <div className="relative z-10">
-                            <div className="flex items-center gap-2 mb-3">
-                                <span className="bg-red-500/10 text-red-600 dark:text-red-500 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Perlu Perhatian</span>
-                            </div>
-                            <div className="text-5xl font-black text-zinc-900 dark:text-white mb-1 group-hover:text-red-600 dark:group-hover:text-red-400 transition duration-300">{stats.sadCustomers}</div>
-                            <p className="text-zinc-500 font-medium text-sm">Komplain / Isu (⭐ 1-3)</p>
-                        </div>
-                        <Link href="/dashboard/reviews" className="relative z-10 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-white text-xs font-bold px-5 py-3 rounded-xl transition flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95">
-                            Cek Inbox <ArrowLeft size={14} className="rotate-180"/>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-
-            {/* LIST PROJECT / TOKO */}
-            <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500">
-                        <ScanLine size={20}/>
-                    </div>
-                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Project Aktif</h2>
-                </div>
-            </div>
-            
-            {campaigns.length === 0 ? (
-                <div className="bg-white/50 dark:bg-zinc-900/30 border border-dashed border-zinc-300 dark:border-zinc-800 rounded-[2rem] p-16 text-center">
-                    <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Rocket size={32} className="text-zinc-400 dark:text-zinc-500"/>
-                    </div>
-                    <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">Belum ada toko yang didaftarkan</h3>
-                    <p className="text-zinc-500 text-sm mb-8 max-w-sm mx-auto">Mulai kumpulkan review bintang 5 pertamamu dengan membuat link toko baru.</p>
-                    <Link href="/dashboard/create" className="inline-flex items-center gap-2 bg-zinc-900 dark:bg-white text-white dark:text-black px-8 py-3 rounded-xl font-bold hover:bg-zinc-800 dark:hover:bg-zinc-200 transition shadow-lg shadow-black/10 dark:shadow-white/10">
-                        <Plus size={18}/> Buat Toko Pertama
-                    </Link>
-                </div>
-            ) : (
-                <div className="grid gap-6">
-                    {campaigns.map((camp) => (
-                        <div key={camp.id} className={`group bg-white dark:bg-zinc-900/40 backdrop-blur-sm border border-zinc-200 dark:border-zinc-800 rounded-[2rem] p-6 md:p-8 transition duration-500 hover:border-amber-500/30 hover:bg-zinc-50 dark:hover:bg-zinc-900/60 ${expandedQrId === camp.id ? 'ring-2 ring-amber-500/20 bg-zinc-50 dark:bg-zinc-900' : ''}`}>
-                            
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                                <div>
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <h3 className="font-extrabold text-2xl text-zinc-900 dark:text-white group-hover:text-amber-500 transition duration-300">{camp.brand_name}</h3>
-                                        <span className="bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider border border-green-500/20">Active</span>
-                                    </div>
-                                    <a href={`/${camp.slug}`} target="_blank" className="text-zinc-500 text-sm hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition">
-                                        <ExternalLink size={14}/> reviewboost.id/{camp.slug}
-                                    </a>
-                                </div>
-                                
-                                <div className="flex gap-2 w-full md:w-auto">
-                                    <button 
-                                        onClick={() => copyToClipboard(camp.slug, camp.id)} 
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm bg-zinc-100 dark:bg-white text-zinc-900 dark:text-black hover:bg-zinc-200 dark:hover:bg-zinc-200 transition shadow-lg shadow-black/5 dark:shadow-white/5 active:scale-95 border border-zinc-200 dark:border-transparent"
-                                    >
-                                        {copiedId === camp.id ? <Check size={16} className="text-green-600"/> : <Copy size={16}/>} 
-                                        {copiedId === camp.id ? "Tersalin!" : "Salin Link"}
-                                    </button>
-                                    
-                                    <Link 
-                                        href={`/dashboard/analytics/${camp.id}`} 
-                                        className="flex-1 md:flex-none flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-sm border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-white transition active:scale-95"
-                                    >
-                                        <BarChart3 size={16}/> Analitik
-                                    </Link>
-                                    
-                                    <button 
-                                        onClick={() => toggleQr(camp.id)} 
-                                        className={`flex items-center justify-center p-3 rounded-xl border transition ${expandedQrId === camp.id ? 'bg-amber-500 border-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'}`}
-                                    >
-                                        <QrCode size={20}/>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {expandedQrId === camp.id && (
-                                <div className="mt-6 pt-8 border-t border-zinc-200 dark:border-zinc-800/50 animate-in slide-in-from-top-4 fade-in duration-300">
-                                    <div className="bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-8">
-                                        <div className="bg-white p-3 rounded-xl shadow-2xl shadow-black/20 dark:shadow-black/50 rotate-2 hover:rotate-0 transition duration-300 border border-zinc-100">
-                                            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${window.location.origin}/${camp.slug}`} alt="QR Code" className="w-32 h-32"/>
-                                        </div>
-                                        <div className="flex-1 text-center md:text-left">
-                                            <h4 className="text-zinc-900 dark:text-white text-lg font-bold mb-2">QR Code Siap Cetak 🖨️</h4>
-                                            <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6 max-w-md">
-                                                Cetak QR Code ini dan tempel di meja kasir atau kemasan produkmu. Pelanggan tinggal scan buat kasih review.
-                                            </p>
-                                            
-                                            <button 
-                                                onClick={() => handleDownloadQr(camp.slug, camp.brand_name, camp.id)}
-                                                disabled={downloadingId === camp.id}
-                                                className="inline-flex items-center gap-2 text-amber-600 dark:text-amber-500 hover:text-amber-500 dark:hover:text-amber-400 text-sm font-bold bg-amber-500/10 hover:bg-amber-500/20 px-5 py-3 rounded-xl transition border border-amber-500/20 disabled:opacity-50 disabled:cursor-wait"
-                                            >
-                                                {downloadingId === camp.id ? <Loader2 size={16} className="animate-spin"/> : <Download size={16}/>} 
-                                                {downloadingId === camp.id ? "Mendownload..." : "Download Versi HD (1000px)"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* UPGRADE MODAL */}
-            {showUpgradeModal && (
-                <div className="fixed inset-0 bg-black/50 dark:bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full max-w-5xl rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] overflow-y-auto">
-                        <button onClick={() => setShowUpgradeModal(false)} className="absolute top-6 right-6 p-3 bg-zinc-100 dark:bg-zinc-900 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white z-20 border border-zinc-200 dark:border-zinc-800"><X size={20} /></button>
-                        
-                        <div className="text-center mb-12 mt-6">
-                            <span className="text-amber-500 text-sm font-bold uppercase tracking-widest mb-2 block">Premium Access</span>
-                            <h2 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white mb-4">Upgrade Bisnismu 🚀</h2>
-                            <p className="text-zinc-500 dark:text-zinc-400 text-lg max-w-2xl mx-auto">Investasi kecil untuk reputasi bisnis yang tak ternilai harganya.</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                             {/* Pricing Cards */}
-                        </div>
-                    </div>
-                </div>
-            )}
+        <div className="max-w-5xl mx-auto text-center relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-white/10 text-xs font-bold uppercase tracking-widest text-amber-500 mb-8 backdrop-blur-md shadow-lg">
+            <Star size={12} className="fill-amber-500" /> #1 Manajer Reputasi
+          </div>
+          
+          <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-8 leading-tight">
+            Reputasi Lebih Baik,<br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500">
+              Tanpa Ribet.
+            </span>
+          </h1>
+          
+          <p className="text-lg md:text-xl text-zinc-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            Sistem pintar yang memisahkan review negatif ke inbox pribadi, 
+            dan mendorong pelanggan puas ke Google Maps.
+          </p>
+          
+          <div className="flex flex-col md:flex-row gap-4 justify-center mb-16">
+            <Link href="/register" className="px-8 py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-black font-bold text-lg rounded-2xl hover:scale-105 transition shadow-[0_0_40px_rgba(245,158,11,0.3)] flex items-center justify-center gap-2">
+              Mulai Sekarang <ArrowRight size={20}/>
+            </Link>
+            <Link href="#demo" className="px-8 py-4 bg-zinc-900 text-white border border-zinc-800 font-bold text-lg rounded-2xl hover:bg-zinc-800 transition flex items-center justify-center gap-2">
+              <Play size={20} /> Tonton Video
+            </Link>
+          </div>
         </div>
+      </section>
+
+      {/* --- SOCIAL PROOF --- */}
+      <section className="py-10 border-y border-white/5 bg-black/50">
+          <div className="max-w-7xl mx-auto px-6 text-center">
+              <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-8">
+                Dirancang untuk Berbagai Bisnis Modern
+              </p>
+              
+              <div className="flex flex-wrap justify-center gap-8 md:gap-16 opacity-40 grayscale hover:opacity-100 transition duration-500 cursor-default">
+                  <span className="text-xl font-black tracking-widest uppercase" title="Coffee Shop">KopiSenja</span>
+                  <span className="text-xl font-black italic" title="F&B">BURGER.CO</span>
+                  <span className="text-xl font-black tracking-tighter" title="Barbershop">BarberKing</span>
+                  <span className="text-xl font-black font-mono" title="Beauty Salon">BeautyLash</span>
+                  <span className="text-xl font-black" title="Laundry Service">LoundryX</span>
+              </div>
+          </div>
+      </section>
+
+      {/* --- VIDEO DEMO (UPDATED) --- */}
+      <section id="demo" className="py-24 bg-zinc-950 relative overflow-hidden scroll-mt-20">
+        <div className="absolute -left-40 top-1/2 w-96 h-96 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+        <div className="absolute -right-40 top-1/2 w-96 h-96 bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+        <div className="max-w-6xl mx-auto px-6 text-center relative z-10">
+           <div className="mb-12">
+              <h2 className="text-3xl md:text-5xl font-black mb-4">Video Demo</h2>
+              <p className="text-zinc-400">Tonton bagaimana sistem kami bekerja dalam 30 detik.</p>
+           </div>
+           
+           {/* 🔥 VIDEO PLAYER START 🔥 */}
+           <div className="relative w-full aspect-video bg-zinc-900/50 rounded-[2rem] border border-zinc-800 shadow-[0_0_60px_rgba(0,0,0,0.5)] overflow-hidden group hover:border-amber-500/30 transition duration-500">
+               <video 
+                   autoPlay 
+                   loop 
+                   muted 
+                   playsInline 
+                   className="w-full h-full object-cover"
+               >
+                   {/* Pastikan nama file di folder public sama persis (Case Sensitive) */}
+                   <source src="/Demo-Reviewboost.MOV" type="video/quicktime" />
+                   <source src="/Demo-Reviewboost.MOV" type="video/mp4" />
+                   Browser Anda tidak mendukung tag video.
+               </video>
+               
+               {/* Overlay tipis biar kelihatan menyatu sama tema gelap */}
+               <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/20 to-transparent"></div>
+           </div>
+           {/* 🔥 VIDEO PLAYER END 🔥 */}
+
+        </div>
+      </section>
+
+      {/* --- FITUR --- */}
+      <section id="features" className="py-24 bg-black relative scroll-mt-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-black mb-4">Fitur Andalan</h2>
+            <p className="text-zinc-400">Teknologi yang bekerja keras untuk bisnis Anda.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <FeatureCard icon={<Shield size={32} className="text-blue-500"/>} title="Filter Cerdas" desc="Review bintang 1-3 kami tahan di inbox pribadi. Cuma bintang 4-5 yang lolos ke Google Maps." />
+            <FeatureCard icon={<MessageCircle size={32} className="text-green-500"/>} title="Database WhatsApp" desc="Kumpulkan nomor WA pelanggan secara otomatis dari setiap review yang masuk. Aset mahal!" />
+            <FeatureCard icon={<BarChart3 size={32} className="text-purple-500"/>} title="Analitik Real-time" desc="Pantau performa tiap cabang toko Anda. Siapa staf terbaik? Jam berapa paling ramai?" />
+          </div>
+        </div>
+      </section>
+
+      {/* --- HARGA --- */}
+      <section id="pricing" className="py-24 border-t border-white/5 relative scroll-mt-20">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-900/10 via-black to-black"></div>
+        
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-black mb-4">Investasi Cerdas.</h2>
+            <p className="text-zinc-400">Pilih paket terbaik untuk pertumbuhan bisnismu.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            
+            <PricingCard 
+              title="BASIC" 
+              price="Rp 99rb"
+              period="/bulan"
+              desc="UMKM Pemula."
+              features={["1 Toko", "100 Review / bulan", "Buka Sensor Inbox", "Bantuan WA Standar"]}
+              btnText="Pilih Basic" 
+              highlightColor="blue"
+              onClick={() => handleBuy("BASIC", 99000)}
+            />
+
+            <PricingCard 
+              title="PRO" 
+              price="Rp 149rb"
+              period="/bulan"
+              desc="Bisnis Tumbuh."
+              features={["3 Toko Cabang", "500 Review / bulan", "Hapus Branding", "Ekspor Data Pelanggan", "Bantuan Prioritas"]}
+              btnText="Pilih PRO 🔥" 
+              active={true} 
+              highlightColor="amber" 
+              recommended
+              onClick={() => handleBuy("PRO", 149000)}
+            />
+
+            <PricingCard 
+             title="ENTERPRISE" 
+              price="Rp 600rb"
+              period="/6 bulan"
+              desc="Franchise & Agency."
+              features={["UNLIMITED Toko", "UNLIMITED Review", "Semua Fitur PRO+", "VIP Jalur Khusus", "Integrasi Khusus"]}
+              btnText="Hubungi Sales" 
+              highlightColor="purple"
+              onClick={() => handleBuy("ENTERPRISE", 600000)}
+            />
+
+          </div>
+        </div>
+      </section>
+
+      {/* --- CTA FINAL --- */}
+      <section className="py-20 px-6 text-center">
+        <div className="max-w-4xl mx-auto bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 p-12 rounded-[3rem] relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+          
+          <h2 className="text-3xl md:text-4xl font-black mb-6">Siap Dominasi Pasar?</h2>
+          <p className="text-zinc-400 mb-8 max-w-lg mx-auto">
+            Kompetitor Anda mungkin sudah pakai ini. Jangan ketinggalan.
+          </p>
+          
+          <Link href="/register" className="inline-block px-10 py-5 bg-white text-black font-bold rounded-2xl hover:bg-zinc-200 transition shadow-2xl flex items-center gap-2 mx-auto">
+             <Sparkles size={20} className="text-amber-500"/> Mulai Sekarang
+          </Link>
+        </div>
+      </section>
+
+      <footer className="py-10 border-t border-white/5 text-center text-zinc-600 text-sm">
+      <p>&copy; {new Date().getFullYear()} ReviewBoost Indonesia. Dibuat untuk Pemenang. · <a href="/privacy" className="hover:text-zinc-400 transition">Privasi</a> · <a href="/terms" className="hover:text-zinc-400 transition">Syarat & Ketentuan</a></p>
+      </footer>
+
     </div>
   );
+}
+
+// --- KOMPONEN FITUR ---
+function FeatureCard({ icon, title, desc }: any) {
+  return (
+    <div className="p-8 rounded-3xl bg-zinc-900/30 border border-white/5 hover:border-amber-500/30 transition group">
+      <div className="mb-6 p-4 bg-black rounded-2xl w-fit border border-zinc-800 group-hover:scale-110 transition">{icon}</div>
+      <h3 className="text-xl font-bold mb-3">{title}</h3>
+      <p className="text-zinc-400 leading-relaxed">{desc}</p>
+    </div>
+  )
+}
+
+// --- KOMPONEN HARGA ---
+function PricingCard({ title, price, period, desc, features, btnText, active, highlightColor = "zinc", recommended, onClick }: any) {
+  const colors: any = { zinc: "border-zinc-800 hover:border-zinc-700", blue: "border-blue-900/50 hover:border-blue-500", amber: "border-amber-500/50 ring-1 ring-amber-500/50 bg-amber-950/10", purple: "border-purple-900/50 hover:border-purple-500" };
+  const btnColors: any = { zinc: "bg-zinc-800 text-white hover:bg-zinc-700", blue: "bg-blue-600 text-white hover:bg-blue-500", amber: "bg-amber-500 text-black hover:bg-amber-400 shadow-lg shadow-amber-500/20", purple: "bg-purple-600 text-white hover:bg-purple-500" };
+  
+  return (
+    <div className={`p-8 rounded-3xl border bg-zinc-900/20 relative flex flex-col ${colors[highlightColor]} transition-all duration-300 hover:-translate-y-2`}>
+      {recommended && <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-lg">Paling Laris</div>}
+      <div className="mb-6">
+        <h3 className={`text-lg font-black mb-2 uppercase tracking-wider text-${highlightColor}-500`}>{title}</h3>
+        <div className="flex items-baseline gap-1"><span className="text-3xl font-bold text-white">{price}</span>{period && <span className="text-xs text-zinc-500">{period}</span>}</div>
+        <p className="text-xs text-zinc-500 mt-2">{desc}</p>
+      </div>
+      <ul className="space-y-4 mb-8 flex-1">{features.map((f: string, i: number) => (<li key={i} className="flex items-start gap-3 text-sm text-zinc-300"><CheckCircle2 size={16} className={`shrink-0 mt-0.5 ${active ? "text-amber-500" : "text-zinc-600"}`}/>{f}</li>))}</ul>
+      
+      <button 
+        onClick={onClick}
+        className={`w-full py-4 rounded-xl font-bold text-sm transition ${btnColors[highlightColor]}`}
+      >
+        {btnText}
+      </button>
+    </div>
+  )
 }
