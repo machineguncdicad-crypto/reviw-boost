@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { X, Link as LinkIcon, MapPin, ShoppingBag, Loader2 } from 'lucide-react' 
+import toast from "react-hot-toast" // ✅ IMPORT TOAST DITAMBAHKAN
 
 export default function CreateModal({ isOpen, onClose, onSuccess, userId }: any) {
   const [loading, setLoading] = useState(false)
@@ -17,7 +18,7 @@ export default function CreateModal({ isOpen, onClose, onSuccess, userId }: any)
   const handleSubmit = async () => {
     // 1. Validasi: Pastikan semua diisi
     if (!formData.brand_name || !formData.original_link) {
-      alert('Isi dulu nama brand & link-nya, Bos!')
+      toast.error('Isi dulu nama brand & link-nya, Bos!') // ✅ GANTI JADI TOAST
       return
     }
 
@@ -39,9 +40,9 @@ export default function CreateModal({ isOpen, onClose, onSuccess, userId }: any)
     })
 
     if (error) {
-      alert('Gagal buat link: ' + error.message)
+      toast.error('Gagal buat link: ' + error.message) // ✅ GANTI JADI TOAST
     } else {
-      alert('🔥 MANTAP! Link berhasil dibuat!')
+      toast.success('🔥 MANTAP! Link berhasil dibuat!') // ✅ GANTI JADI TOAST
       setFormData({ brand_name: '', platform: 'google', original_link: '' }) // Reset form
       onSuccess() // Refresh dashboard
       onClose() // Tutup modal

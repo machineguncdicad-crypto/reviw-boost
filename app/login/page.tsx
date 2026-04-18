@@ -4,11 +4,12 @@ import Image from "next/image";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import Link from "next/link"; 
+import Link from "next/link";
 import { 
   Mail, Lock, Eye, EyeOff, Loader2, 
   ArrowRight, CheckCircle2 
 } from "lucide-react";
+import toast from "react-hot-toast"; // ✅ 1. IMPORT TOAST
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,13 +17,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  
+  // ✅ 2. State errorMsg udah gw buang biar kode lu lebih bersih
 
   // 1. LOGIN EMAIL & PASSWORD
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMsg("");
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -32,13 +33,13 @@ export default function LoginPage() {
 
       if (error) throw error;
       
-      // 🔥 FIX PENTING: GANTI ROUTER PUSH JADI WINDOW LOCATION 🔥
-      // Ini maksa browser refresh total pas masuk dashboard.
-      // Masalah "harus refresh dulu baru bisa scan" DIJAMIN HILANG.
-      window.location.href = "/dashboard"; 
+      toast.success("Login Berhasil! Mengalihkan..."); // ✅ 3. Toast Sukses
+      
+      // Maksa browser refresh total pas masuk dashboard.
+      window.location.href = "/dashboard";
 
     } catch (error: any) {
-      setErrorMsg(error.message || "Gagal login. Cek email/password.");
+      toast.error(error.message || "Gagal login. Cek email/password."); // ✅ 4. Toast Error
       setLoading(false);
     } 
   };
@@ -51,7 +52,8 @@ export default function LoginPage() {
         redirectTo: `${location.origin}/auth/callback`,
       },
     })
-    if (error) setErrorMsg(error.message);
+    
+    if (error) toast.error(error.message); // ✅ 5. Toast Error Google
   }
 
   return (
@@ -59,7 +61,6 @@ export default function LoginPage() {
       
       {/* --- BAGIAN KIRI: VISUAL & BRANDING (Hidden di HP) --- */}
       <div className="hidden lg:flex w-1/2 bg-zinc-900 relative items-center justify-center p-12 overflow-hidden">
-        {/* Background Effects */}
         <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-amber-500/10 blur-[100px] rounded-full pointer-events-none"></div>
         
@@ -154,12 +155,7 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                {/* Error Alert */}
-                {errorMsg && (
-                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium text-center animate-in fade-in">
-                        {errorMsg}
-                    </div>
-                )}
+                {/* ✅ 6. Block UI Error bawaan udah dihapus dari sini */}
 
                 {/* Submit Button */}
                 <button 

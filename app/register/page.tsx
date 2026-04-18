@@ -9,6 +9,7 @@ import {
   Mail, Lock, Eye, EyeOff, Loader2, 
   ArrowRight, Rocket, Store, Gift
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -17,7 +18,6 @@ export default function RegisterPage() {
   const [brandName, setBrandName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
 
   // --- 1. DAFTAR PAKE GOOGLE ---
   const handleGoogleSignUp = async () => {
@@ -31,19 +31,18 @@ export default function RegisterPage() {
       });
       if (error) throw error;
     } catch (error: any) {
-      setErrorMsg(error.message);
+      toast.error(error.message);
       setLoading(false);
     }
   };
 
   // --- 2. DAFTAR PAKE EMAIL ---
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault(); 
+    e.preventDefault();
     setLoading(true);
-    setErrorMsg("");
 
     if (!email || !password || !brandName) {
-        setErrorMsg("Harap isi semua data (Nama Toko, Email, Password).");
+        toast.error("Harap isi semua data (Nama Toko, Email, Password).");
         setLoading(false);
         return;
     }
@@ -63,7 +62,7 @@ export default function RegisterPage() {
       if (error) throw error;
       if (!data.user) throw new Error("Gagal membuat akun.");
 
-      // ✅ Step 2: Aktifkan Free Trial 14 Hari otomatis
+      // Step 2: Aktifkan Free Trial 14 Hari otomatis (Tabel Profiles)
       const trialEndDate = new Date();
       trialEndDate.setDate(trialEndDate.getDate() + 14);
 
@@ -73,22 +72,43 @@ export default function RegisterPage() {
             id: data.user.id,
             email: email,
             business_name: brandName,
-            tier_name: "PRO",                              // Trial dapat akses PRO
-            subscription_status: "trial",                  // Status khusus trial
-            subscription_end_date: trialEndDate.toISOString(), // Expired 14 hari
+            tier_name: "PRO",                      
+            subscription_status: "trial",                  
+            subscription_end_date: trialEndDate.toISOString(), 
             updated_at: new Date().toISOString(),
         });
 
       if (profileError) {
           console.error("Gagal set trial:", profileError);
-          // Tetap lanjut walau profile gagal, jangan block user
       }
 
-      alert("🎉 Selamat! Akun berhasil dibuat.\n\n✨ Kamu dapat FREE TRIAL PRO selama 14 hari!\n\nCek email untuk verifikasi.");
+      // 🔥 Step 3: Bikin Toko/Cabang Pertama otomatis (Tabel Campaigns) 🔥
+      const randomCode = Math.random().toString(36).substring(2, 5);
+      const cleanName = brandName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const defaultSlug = `${cleanName}-${randomCode}`;
+
+      const { error: campaignError } = await supabase
+        .from('campaigns')
+        .insert({
+            user_id: data.user.id,
+            brand_name: `${brandName} (Pusat)`,
+            slug: defaultSlug,
+            review_platform: 'google',
+            status: 'active'
+        });
+
+      if (campaignError) {
+          console.error("Gagal bikin toko pusat default:", campaignError);
+      }
+
+      // Step 4: Toast Sukses
+      toast.success("🎉 Akun berhasil dibuat! Kamu dapat Free Trial PRO 14 Hari. Cek email untuk verifikasi.", {
+        duration: 5000,
+      });
       router.push("/login");
 
     } catch (error: any) {
-      setErrorMsg(error.message || "Gagal mendaftar.");
+      toast.error(error.message || "Gagal mendaftar.");
     } finally {
       setLoading(false);
     }
@@ -115,7 +135,6 @@ export default function RegisterPage() {
               Bergabunglah dengan pebisnis cerdas yang mengambil kendali penuh atas reputasi digital mereka.
            </p>
            
-           {/* ✅ Badge Free Trial */}
            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6">
               <div className="flex items-center gap-3 mb-3">
                   <Gift size={20} className="text-amber-500"/>
@@ -147,7 +166,6 @@ export default function RegisterPage() {
                 <h2 className="text-3xl font-bold">Buat Akun Baru</h2>
                 <p className="text-zinc-500 mt-2">Daftar dalam 30 detik. Gratis tanpa kartu kredit.</p>
                 
-                {/* ✅ Badge Trial di Mobile */}
                 <div className="lg:hidden mt-4 flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-xl w-fit">
                     <Gift size={14} className="text-amber-500"/>
                     <span className="text-amber-500 text-xs font-bold">FREE TRIAL PRO 14 HARI</span>
@@ -211,13 +229,6 @@ export default function RegisterPage() {
                         </button>
                     </div>
                 </div>
-
-                {/* Error Alert */}
-                {errorMsg && (
-                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm font-medium text-center animate-in fade-in">
-                        {errorMsg}
-                    </div>
-                )}
 
                 {/* Submit Button */}
                 <button 

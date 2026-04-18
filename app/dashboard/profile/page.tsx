@@ -9,10 +9,11 @@ import {
   CheckCircle2, Zap, Crown, Rocket, Building2, EyeOff, 
   Plus, Trash2 
 } from "lucide-react";
+import toast from "react-hot-toast"; // ✅ IMPORT TOAST DITAMBAHKAN
 
 export default function ProfilePage() {
   const router = useRouter();
-  
+
   // 📸 1. REF BUAT INPUT FILE
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +75,7 @@ export default function ProfilePage() {
             }
 
             if (data.tier_name) setCurrentPlan(data.tier_name);
-            
+
             if (data.subscription_end_date) {
                 const date = new Date(data.subscription_end_date);
                 setExpiryDate(date.toLocaleDateString("id-ID", { 
@@ -134,10 +135,9 @@ export default function ProfilePage() {
       if (dbError) throw dbError;
 
       setFormData(prev => ({ ...prev, avatarUrl: publicUrl }));
-      alert("📸 Foto berhasil diupdate!");
-
+      toast.success("📸 Foto berhasil diupdate!"); // ✅ GANTI JADI TOAST
     } catch (error: any) {
-      alert("Gagal upload: " + error.message);
+      toast.error("Gagal upload: " + error.message); // ✅ GANTI JADI TOAST
     } finally {
       setIsUploading(false);
     }
@@ -156,12 +156,12 @@ export default function ProfilePage() {
 
   const addBranch = () => {
     // Limit Sesuai Paket
-    let limit = 1; 
+    let limit = 1;
     if (currentPlan === 'PRO') limit = 3;
     if (currentPlan === 'ENTERPRISE') limit = 999;
-    
+
     if (branches.length >= limit) {
-        alert(`❌ Paket ${currentPlan} maksimal ${limit} cabang. Upgrade dulu bro!`);
+        toast.error(`❌ Paket ${currentPlan} maksimal ${limit} cabang. Upgrade dulu bro!`); // ✅ GANTI JADI TOAST
         return;
     }
     setBranches([...branches, { name: "", url: "" }]);
@@ -169,7 +169,7 @@ export default function ProfilePage() {
 
   const removeBranch = (index: number) => {
     if (branches.length === 1) {
-        alert("⚠️ Minimal harus punya 1 lokasi utama!");
+        toast.error("⚠️ Minimal harus punya 1 lokasi utama!"); // ✅ GANTI JADI TOAST
         return;
     }
     const newBranches = branches.filter((_, i) => i !== index);
@@ -179,6 +179,7 @@ export default function ProfilePage() {
   // SIMPAN PROFIL
   const handleSaveProfile = async () => {
     setIsLoading(true);
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -193,9 +194,10 @@ export default function ProfilePage() {
         .eq('id', formData.id);
 
       if (error) throw error;
-      alert("✅ Profil & Cabang berhasil diperbarui!");
+
+      toast.success("✅ Profil & Cabang berhasil diperbarui!"); // ✅ GANTI JADI TOAST
     } catch (error: any) {
-      alert("❌ Gagal: " + error.message);
+      toast.error("❌ Gagal: " + error.message); // ✅ GANTI JADI TOAST
     } finally {
       setIsLoading(false);
     }
@@ -203,17 +205,27 @@ export default function ProfilePage() {
 
   // GANTI PASSWORD
   const handlePassChange = (e: any) => setPassData({ ...passData, [e.target.name]: e.target.value });
-  
+
   const handleUpdatePassword = async () => {
-    if (!passData.oldPass || !passData.newPass) { alert("⚠️ Isi password dulu!"); return; }
+    if (!passData.oldPass || !passData.newPass) { 
+        toast.error("⚠️ Isi password dulu!"); // ✅ GANTI JADI TOAST
+        return;
+    }
     setIsLoading(true);
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: formData.email, password: passData.oldPass });
       if (signInError) throw new Error("Password Lama SALAH!");
+      
       const { error } = await supabase.auth.updateUser({ password: passData.newPass });
       if (error) throw error;
-      alert("🔒 Password diganti!"); setPassData({ oldPass: "", newPass: "" });
-    } catch (e: any) { alert(e.message); } finally { setIsLoading(false); }
+      
+      toast.success("🔒 Password diganti!"); // ✅ GANTI JADI TOAST
+      setPassData({ oldPass: "", newPass: "" });
+    } catch (e: any) { 
+        toast.error(e.message); // ✅ GANTI JADI TOAST
+    } finally { 
+        setIsLoading(false); 
+    }
   };
 
   // 🔥🔥🔥 BAGIAN INI YANG DIPERBAIKI (PEMBAYARAN) 🔥🔥🔥
@@ -227,9 +239,8 @@ export default function ProfilePage() {
     try {
         // 1. AMBIL SESSION DULU (BUAT BUKTI LOGIN)
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (!session) {
-            alert("Sesi habis, silakan login ulang.");
+            toast.error("Sesi habis, silakan login ulang."); // ✅ GANTI JADI TOAST
             return;
         }
 
@@ -238,30 +249,35 @@ export default function ProfilePage() {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                // 👇 INI DIA KUNCINYA! KITA BAWA KTP USER
                 'Authorization': `Bearer ${session.access_token}`
             },
             body: JSON.stringify({ plan: planName, price: price })
         });
-        
+
         const data = await response.json();
         
         if (!response.ok) {
-            // Kalau backend error (misal "Wajib Login"), lempar errornya
             throw new Error(data.error || "Gagal membuat transaksi");
         }
 
         // 3. MUNCULIN SNAP MIDTRANS
         if ((window as any).snap) {
             (window as any).snap.pay(data.token, {
-                onSuccess: function(){ alert(`🎉 UPGRADE SUKSES!`); window.location.reload(); },
-                onPending: function(){ alert("⏳ Menunggu pembayaran..."); },
-                onError: function(){ alert("❌ Gagal bayar!"); }
+                onSuccess: function(){ 
+                    toast.success(`🎉 UPGRADE SUKSES!`); // ✅ GANTI JADI TOAST
+                    setTimeout(() => window.location.reload(), 1500); // Tunggu bentar biar toast kelihatan sebelum refresh
+                },
+                onPending: function(){ 
+                    toast('⏳ Menunggu pembayaran...', { icon: '⏳' }); // ✅ GANTI JADI TOAST
+                },
+                onError: function(){ 
+                    toast.error("❌ Gagal bayar!"); // ✅ GANTI JADI TOAST
+                }
             });
         }
     } catch (err: any) {
         console.error("Payment Error:", err);
-        alert("Error: " + err.message);
+        toast.error("Error: " + err.message); // ✅ GANTI JADI TOAST
     }
   };
 

@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { createHash } from "crypto"; // Built-in Node.js, gak perlu install
+import { createHash } from "crypto";
 
-// Setup Admin Client
+// Setup Admin Client (Biar punya hak akses full nembus database)
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 /**
- * Verifikasi bahwa notifikasi beneran dari Midtrans, bukan dari hacker.
- * Rumus: SHA512(order_id + status_code + gross_amount + server_key)
+ * Gatekeeper 1: Verifikasi bahwa notifikasi beneran dari server Midtrans
  */
 function verifyMidtransSignature(
     orderId: string,
@@ -28,7 +27,7 @@ export async function POST(request: Request) {
     try {
         const json = await request.json();
 
-        // === STEP 1: VERIFIKASI SIGNATURE (GATEKEEPER UTAMA) ===
+        // === STEP 1: VERIFIKASI SIGNATURE ===
         const isValid = verifyMidtransSignature(
             json.order_id,
             json.status_code,
@@ -37,8 +36,7 @@ export async function POST(request: Request) {
         );
 
         if (!isValid) {
-            // Tolak request kalau signature gak cocok
-            console.warn("🚨 WEBHOOK DITOLAK: Signature tidak valid!", json.order_id);
+            console.warn("🚨 WEBHOOK DITOLAK: Signature Midtrans Palsu!", json.order_id);
             return NextResponse.json({ message: "Invalid signature" }, { status: 403 });
         }
 
@@ -47,7 +45,7 @@ export async function POST(request: Request) {
         const fraud = json.fraud_status;
         const orderId = json.order_id;
 
-        console.log(`🔔 Webhook Verified: Order ${orderId} | Status: ${status}`);
+        console.log(`🔔 Webhook Masuk: Order ${orderId} | Status: ${status}`);
 
         let paymentStatus = "";
         if (status === 'capture') {
@@ -60,10 +58,10 @@ export async function POST(request: Request) {
             paymentStatus = 'pending';
         }
 
-        // === STEP 3: PROSES KALAU PAID ===
+        // === STEP 3: PROSES JIKA LUNAS ===
         if (paymentStatus === 'paid') {
 
-            // Ambil data transaksi dari DB
+            // 1. Cari transaksi di Database kita
             const { data: trx, error: trxError } = await supabaseAdmin
                 .from('transactions')
                 .select('*')
@@ -71,17 +69,58 @@ export async function POST(request: Request) {
                 .single();
 
             if (trxError || !trx) {
-                console.error("❌ Transaksi tidak ditemukan:", orderId);
+                console.error("❌ Transaksi tidak ditemukan di DB:", orderId);
                 return NextResponse.json({ message: "Transaction not found" }, { status: 404 });
             }
 
-            // Cegah double processing
+            // 2. Cegah Proses Ganda (Idempotency)
             if (trx.status === 'paid') {
-                console.log("⚠️ Transaksi sudah diproses sebelumnya:", orderId);
+                console.log("⚠️ Transaksi ini sudah pernah diproses lunas:", orderId);
                 return NextResponse.json({ message: "Already paid" });
             }
 
-            // Update status transaksi
+            // 🔥 GATEKEEPER 2: VALIDASI HARGA (Anti Hacker Diskon) 🔥
+            // Pastikan jumlah yang dibayar di Midtrans SAMA PERSIS dengan tagihan di DB kita.
+            const amountPaid = parseFloat(json.gross_amount);
+            if (amountPaid !== trx.amount) {
+                console.error(`🚨 INDIKASI KECURANGAN! Order: ${orderId} | Bayar: Rp${amountPaid} | Seharusnya: Rp${trx.amount}`);
+                
+                // Tandai sebagai penipuan di DB kita, biar gak dikasih paket PRO
+                await supabaseAdmin
+                    .from('transactions')
+                    .update({ status: 'fraud', updated_at: new Date().toISOString() })
+                    .eq('id', trx.id);
+                    
+                return NextResponse.json({ message: "Amount mismatch / Fraud" }, { status: 400 });
+            }
+
+            // 3. Ambil data profil user untuk cek sisa masa aktif langganan saat ini
+            const { data: profile } = await supabaseAdmin
+                .from('profiles')
+                .select('subscription_end_date')
+                .eq('id', trx.user_id)
+                .single();
+
+            // 🔥 LOGIKA PERPANJANGAN AKUMULASI (Anti Bikin Rugi Pelanggan) 🔥
+            const duration = trx.duration_months || 1;
+            let currentEndDate = new Date(); // Hari ini
+            
+            // Kalau user masih punya sisa masa aktif, kita tambahin harinya dari sisa tersebut
+            if (profile && profile.subscription_end_date) {
+                const existingDate = new Date(profile.subscription_end_date);
+                if (existingDate > currentEndDate) {
+                    currentEndDate = existingDate; // Mulai hitung dari tanggal kedaluwarsa yang lama
+                }
+            }
+
+            // Tambahkan durasi bulan/tahun
+            if (duration > 100) {
+                currentEndDate.setFullYear(currentEndDate.getFullYear() + 100); // Paket Lifetime/Enterprise Sultan
+            } else {
+                currentEndDate.setMonth(currentEndDate.getMonth() + duration);
+            }
+
+            // 4. Update status transaksi jadi Paid
             await supabaseAdmin
                 .from('transactions')
                 .update({
@@ -91,46 +130,39 @@ export async function POST(request: Request) {
                 })
                 .eq('id', trx.id);
 
-            // Hitung tanggal kadaluarsa
-            const duration = trx.duration_months || 1;
-            const endDate = new Date();
-            if (duration > 100) {
-                endDate.setFullYear(endDate.getFullYear() + 100); // Lifetime
-            } else {
-                endDate.setMonth(endDate.getMonth() + duration);
-            }
-
-            // Upgrade profil user
+            // 5. Berikan Hak Akses (Upgrade Profil User)
             const { error: profileError } = await supabaseAdmin
                 .from('profiles')
                 .update({
                     tier_name: trx.plan_type,
                     subscription_status: 'active',
-                    subscription_end_date: endDate.toISOString(),
+                    subscription_end_date: currentEndDate.toISOString(),
                     updated_at: new Date().toISOString()
                 })
                 .eq('id', trx.user_id);
 
             if (profileError) {
-                console.error("❌ Gagal upgrade profil:", profileError);
+                console.error("❌ Gagal upgrade profil user:", profileError);
                 return NextResponse.json({ message: "Profile update failed" }, { status: 500 });
             }
 
-            console.log(`✅ SUKSES! User ${trx.user_id} → ${trx.plan_type} s/d ${endDate.toISOString()}`);
+            console.log(`✅ SUKSES CAIR! Uang masuk dari User ${trx.user_id}. Paket ${trx.plan_type} aktif s/d ${currentEndDate.toISOString()}`);
 
-        } else if (paymentStatus === 'failed') {
+        } 
+        // === PROSES JIKA GAGAL/EXPIRED ===
+        else if (paymentStatus === 'failed') {
             await supabaseAdmin
                 .from('transactions')
                 .update({ status: 'failed', updated_at: new Date().toISOString() })
                 .eq('order_id', orderId);
-
-            console.log("❌ Pembayaran Gagal:", orderId);
+            console.log("❌ Pembayaran Dibatalkan / Gagal:", orderId);
         }
 
+        // Harus selalu balas OK ke Midtrans biar dia gak ngirim webhook berulang-ulang
         return NextResponse.json({ message: "OK" });
 
     } catch (error: any) {
-        console.error("🔥 Webhook Error:", error.message);
+        console.error("🔥 Webhook Server Error:", error.message);
         return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

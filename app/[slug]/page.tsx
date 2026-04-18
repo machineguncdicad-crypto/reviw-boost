@@ -4,61 +4,59 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { 
   Star, MessageCircle, MapPin, Smile, Frown, 
-  ArrowRight, Copy, Check, User, Phone, Loader2, Send, CheckCircle2 
+  ArrowRight, Copy, Check, User, Phone, Loader2, Send, CheckCircle2, Gift
 } from "lucide-react";
 import { useParams } from "next/navigation";
 
-// --- 1. KAMUS BAHASA (FULL INDO & INGGRIS) ---
+// --- 1. KAMUS BAHASA (FOKUS KE DUKUNGAN ORGANIK, BUKAN PROMO KASIR) ---
 const translations: any = {
-  id: {
-    title: "Gimana pengalamanmu?",
-    subtitle: "Kasih bintang buat pelayanan kami hari ini ya.",
-    placeholder_good: "Wah makasih! Ceritain dong apa yang bikin kamu seneng...",
-    placeholder_bad: "Waduh maaf ya. Kasih tau kami apa yang kurang...",
-    name_placeholder: "Nama Kamu (Boleh dikosongin)",
-    phone_placeholder: "Nomor WA (Boleh dikosongin)",
-    btn_submit: "Kirim Review",
-    btn_sending: "Lagi ngirim...",
-    thank_title: "Makasih Banyak! 🎉",
-    thank_desc: "Masukan kamu berharga banget buat kemajuan bisnis kami.",
-    thank_internal_title: "Masukan Diterima",
-    thank_internal_desc: "Makasih udah jujur. Pesan ini udah kami terima dan bakal langsung dievaluasi sama Owner.",
-    help_ask: "Boleh minta tolong dikit? 🙏",
-    help_desc: "Copy ulasan kamu tadi & tempel di Google Maps ya. Ini ngebantu banget loh!",
-    btn_copy: "Salin Teks Ulasan",
-    btn_copied: "Udah Disalin!",
-    btn_maps: "Posting di Google Maps",
-    footer: "Powered by ReviewBoost",
-    store_not_found: "Toko Gak Ketemu",
-    store_check_link: "Coba cek lagi link QR Code-nya ya.",
-    // ✅ BARU: Teks consent UU PDP
-    consent_text: "Dengan mengirim, kamu setuju nama & nomor WA kamu disimpan oleh pemilik toko untuk keperluan evaluasi layanan.",
-  },
-  en: {
-    title: "How was your experience?",
-    subtitle: "Please rate our service today.",
-    placeholder_good: "Tell us about your great experience...",
-    placeholder_bad: "Tell us what went wrong...",
-    name_placeholder: "Name (Optional)",
-    phone_placeholder: "WhatsApp (Optional)",
-    btn_submit: "Submit Review",
-    btn_sending: "Sending...",
-    thank_title: "Thank You! 🎉",
-    thank_desc: "Your feedback means a lot to us.",
-    thank_internal_title: "Feedback Received",
-    thank_internal_desc: "Thank you for your honesty. We will evaluate this internally.",
-    help_ask: "Can we ask for a small favor? 🙏",
-    help_desc: "Please copy your review and paste it on Google Maps.",
-    btn_copy: "Copy Text",
-    btn_copied: "Copied!",
-    btn_maps: "Post on Google Maps",
-    footer: "Powered by ReviewBoost",
-    store_not_found: "Store Not Found",
-    store_check_link: "Please check the link.",
-    // ✅ BARU: Teks consent UU PDP
-    consent_text: "By submitting, you agree that your name and WhatsApp number will be stored by the store owner for service evaluation purposes.",
-  }
-};
+    id: {
+      title: "Gimana pengalamanmu?",
+      subtitle: "Kasih bintang buat pelayanan kami hari ini ya.",
+      placeholder_good: "Wah makasih! Ceritain dong apa yang bikin kamu seneng...",
+      placeholder_bad: "Waduh maaf ya. Kasih tau kami apa yang kurang...",
+      name_placeholder: "Nama Kamu (Boleh dikosongin)",
+      phone_placeholder: "Nomor WA (Boleh dikosongin)",
+      btn_submit: "Kirim Review",
+      btn_sending: "Lagi ngirim...",
+      thank_title: "Terima Kasih Banyak! 🎉",
+      thank_desc: "Masukan jujurmu sangat berarti untuk kemajuan bisnis kami.",
+      thank_internal_title: "Masukan Diterima",
+      thank_internal_desc: "Makasih udah jujur. Pesan ini udah kami terima dan bakal langsung dievaluasi sama Owner.",
+      help_ask: "Bantu kami di Google Maps yuk! 👇",
+      help_desc: "Ulasan kamu udah kami siapkan. Tinggal salin teksnya dan paste di Google Maps biar toko ini makin dikenal orang banyak!",
+      btn_copy: "1. Salin Teks Ulasan",
+      btn_copied: "Teks Berhasil Disalin!",
+      btn_maps: "2. Paste di Google Maps",
+      footer: "Powered by ReviewBoost",
+      store_not_found: "Toko Gak Ketemu",
+      store_check_link: "Coba cek lagi link QR Code-nya ya.",
+      consent_text: "Dengan mengirim, kamu setuju nama & nomor WA kamu disimpan oleh pemilik toko untuk keperluan evaluasi layanan.",
+    },
+    en: {
+      title: "How was your experience?",
+      subtitle: "Please rate our service today.",
+      placeholder_good: "Tell us about your great experience...",
+      placeholder_bad: "Tell us what went wrong...",
+      name_placeholder: "Name (Optional)",
+      phone_placeholder: "WhatsApp (Optional)",
+      btn_submit: "Submit Review",
+      btn_sending: "Sending...",
+      thank_title: "Thank You So Much! 🎉",
+      thank_desc: "Your honest feedback means a lot to our business.",
+      thank_internal_title: "Feedback Received",
+      thank_internal_desc: "Thank you for your honesty. We will evaluate this internally.",
+      help_ask: "Help us on Google Maps! 👇",
+      help_desc: "We've prepared your review. Just copy the text and paste it on Google Maps to help more people find us!",
+      btn_copy: "1. Copy Review Text",
+      btn_copied: "Text Copied!",
+      btn_maps: "2. Paste on Google Maps",
+      footer: "Powered by ReviewBoost",
+      store_not_found: "Store Not Found",
+      store_check_link: "Please check the link.",
+      consent_text: "By submitting, you agree that your name and WhatsApp number will be stored by the store owner for service evaluation purposes.",
+    }
+  };
 
 // --- 2. MAPPING WARNA BRANDING ---
 const colorMap: any = {
@@ -76,17 +74,18 @@ export default function PublicReviewPage() {
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<any>(null);
   const [rating, setRating] = useState(0);
-  const [step, setStep] = useState(1); 
+  const [step, setStep] = useState(1);
+
   const [feedback, setFeedback] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [sending, setSending] = useState(false);
+
   const [copied, setCopied] = useState(false);
   const [minRatingGoogle, setMinRatingGoogle] = useState(4); 
   const [brandColor, setBrandColor] = useState("amber");
   const [language, setLanguage] = useState("id");
 
-  // Ref biar increment visit gak jalan 2x (React Strict Mode safety)
   const hasCountedVisit = useRef(false);
 
   // 1. LOAD DATA TOKO
@@ -100,7 +99,7 @@ export default function PublicReviewPage() {
         
         // Cek Tabel PROFILES (Toko Baru)
         const { data: profile } = await supabase.from("profiles").select("*").eq("slug", slug).single();
-        
+ 
         if (profile) {
             setStore(profile);
             currentStore = profile;
@@ -118,14 +117,13 @@ export default function PublicReviewPage() {
             }
         }
 
-        // Ambil settingan dari owner (kasus tabel campaigns)
         if (currentStore && ownerId && !profile) {
             const { data: ownerSettings } = await supabase
                 .from("profiles")
                 .select("min_rating_google, brand_color, language")
                 .eq("id", ownerId)
                 .single();
-            
+
             if (ownerSettings) {
                 if (ownerSettings.min_rating_google) setMinRatingGoogle(ownerSettings.min_rating_google);
                 if (ownerSettings.brand_color) setBrandColor(ownerSettings.brand_color);
@@ -133,7 +131,6 @@ export default function PublicReviewPage() {
             }
         }
 
-        // Catat Kunjungan (Visit Counter)
         if (currentStore && !hasCountedVisit.current) {
             hasCountedVisit.current = true;
             await supabase.rpc('increment_visit', { row_id: currentStore.id });
@@ -181,7 +178,6 @@ export default function PublicReviewPage() {
   // 4. SUBMIT REVIEW KE DATABASE
   const submitFeedback = async () => {
     setSending(true);
-    
     await supabase.from("feedbacks").insert({
         campaign_id: store.id, 
         rating: rating, 
@@ -230,7 +226,7 @@ export default function PublicReviewPage() {
       <Loader2 className="animate-spin text-amber-500"/>
     </div>
   );
-  
+
   if (!store) return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-zinc-500 p-6 text-center">
           <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mb-4 text-2xl">🤷‍♂️</div>
@@ -315,7 +311,6 @@ export default function PublicReviewPage() {
                         </div>
                     </div>
 
-                    {/* ✅ CONSENT TEXT - Comply UU PDP Indonesia */}
                     <p className="text-[10px] text-zinc-600 text-center leading-relaxed px-2">
                         {t.consent_text}
                     </p>
@@ -336,30 +331,31 @@ export default function PublicReviewPage() {
             </div>
         )}
 
-        {/* STEP 3: FINAL SCREEN */}
+        {/* STEP 3: FINAL SCREEN (COPYWRITING BARU) */}
         {step === 3 && (
             <div className="text-center z-10 animate-in zoom-in-95 w-full max-w-sm">
                 
                 {isEligibleForMaps ? (
                     <>
                         <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 ${theme.light}`}>
-                            <CheckCircle2 size={48} className={theme.text}/>
+                            <Gift size={48} className={`${theme.text} animate-bounce`}/>
                         </div>
                         <h2 className="text-3xl font-black text-white mb-2 tracking-tight">{t.thank_title}</h2>
                         <p className="text-zinc-400 text-sm mb-10">{t.thank_desc}</p>
                         
                         <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl shadow-xl relative overflow-hidden">
                             <div className={`absolute top-0 left-0 w-full h-1 ${theme.bg}`}></div>
-                            <p className="text-white font-bold mb-1">{t.help_ask}</p>
-                            <p className="text-zinc-500 text-xs mb-6">{t.help_desc}</p>
                             
-                            <button onClick={copyFeedback} className="w-full flex items-center justify-center gap-2 bg-black hover:bg-zinc-800 border border-zinc-800 text-white py-3 rounded-xl mb-3 text-xs font-bold transition">
-                                {copied ? <><Check size={14}/> {t.btn_copied}</> : <><Copy size={14}/> {t.btn_copy}</>}
+                            <p className="text-white font-bold mb-2 text-lg">{t.help_ask}</p>
+                            <p className="text-zinc-400 text-xs mb-6 leading-relaxed whitespace-pre-line">{t.help_desc}</p>
+                            
+                            <button onClick={copyFeedback} className="w-full flex items-center justify-center gap-2 bg-black hover:bg-zinc-800 border border-zinc-700 text-white py-4 rounded-xl mb-3 text-sm font-bold transition">
+                                {copied ? <><Check size={16} className="text-green-500"/> {t.btn_copied}</> : <><Copy size={16}/> {t.btn_copy}</>}
                             </button>
 
                             <button 
                                 onClick={handleGoToMaps} 
-                                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl shadow-lg transition transform active:scale-95 text-white ${theme.bg}`}
+                                className={`w-full flex items-center justify-center gap-2 font-bold py-4 rounded-xl shadow-lg transition transform active:scale-95 text-white ${theme.bg}`}
                             >
                                 {t.btn_maps} <ArrowRight size={18}/>
                             </button>

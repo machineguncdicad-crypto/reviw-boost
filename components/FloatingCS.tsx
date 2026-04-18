@@ -2,45 +2,92 @@
 
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, X, Send, Bot } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
-// 👇 Kita terima data dari luar (Props)
-interface FloatingCSProps {
-  ownerPhone?: string; // Nomor HP Owner
-  ownerName?: string;  // Nama Owner/Toko
-}
-
-export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
-  // --- KONFIGURASI DINAMIS ---
+export default function FloatingCS() {
+  const pathname = usePathname();
   
-  // 🔥 INI NOMOR LU (DEFAULT) 🔥
-  // Kalau data owner kosong, chat akan masuk ke nomor ini (081224267199)
-  const defaultPhone = "6281224267199"; 
-  const defaultName = "CS ReviewBoost";
+  // 🔥 NOMOR ADMIN (ReviewBoost) 🔥
+  const ADMIN_PHONE = "6281224267199";
+  const ADMIN_NAME = "CS ReviewBoost";
 
-  // Cek & Format Nomor HP Owner
-  const getFormattedPhone = () => {
-    // Prioritaskan nomor dari database (ownerPhone), kalau kosong pake defaultPhone
-    let phone = ownerPhone || defaultPhone;
-    
-    // Bersihin karakter aneh (spasi/strip)
-    phone = phone.replace(/\D/g, ''); 
-    
-    // Ubah 08xx jadi 628xx biar link WA jalan
-    if (phone.startsWith('0')) {
-      phone = '62' + phone.slice(1);
-    }
-    return phone;
-  };
-
-  const targetPhone = getFormattedPhone();
-  const targetName = ownerName || defaultName;
-  // -------------------
-
+  const [targetPhone, setTargetPhone] = useState(ADMIN_PHONE);
+  const [targetName, setTargetName] = useState(ADMIN_NAME);
+  const [isVisible, setIsVisible] = useState(false); // Default hidden pas loading
+  
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // --- LOGIKA MULTI-TENANT (Deteksi URL Otomatis) ---
+  useEffect(() => {
+    const checkRouteAndFetchData = async () => {
+       if (!pathname) return;
+
+       // 1. Kalau di halaman SaaS lu -> Munculin CS Admin (Nomor Lu)
+       const isAdminRoute = pathname === '/' || 
+                            pathname.startsWith('/dashboard') || 
+                            pathname.startsWith('/login') || 
+                            pathname.startsWith('/register') ||
+                            pathname.startsWith('/forgot-password') ||
+                            pathname.startsWith('/update-password') ||
+                            pathname.startsWith('/terms');
+
+       if (isAdminRoute) {
+           setTargetPhone(ADMIN_PHONE);
+           setTargetName(ADMIN_NAME);
+           setIsVisible(true);
+           return;
+       }
+
+       // 2. Kalau di halaman Publik Review (/[slug]) -> Cari nomor WA Owner Toko!
+       const slug = pathname.replace('/', ''); // Ambil slug dari URL
+       if (slug) {
+           try {
+               // Coba cari di profil owner (Toko Baru)
+               const { data: profile } = await supabase.from('profiles').select('phone, business_name').eq('slug', slug).single();
+               if (profile && profile.phone) {
+                   setTargetPhone(formatPhone(profile.phone));
+                   setTargetName(profile.business_name || "CS Toko");
+                   setIsVisible(true);
+                   return;
+               }
+
+               // Fallback: Coba cari di campaigns (Toko Lama)
+               const { data: camp } = await supabase.from('campaigns').select('user_id, brand_name').eq('slug', slug).single();
+               if (camp) {
+                   // Ambil nomor WA dari database profile sang owner
+                   const { data: owner } = await supabase.from('profiles').select('phone').eq('id', camp.user_id).single();
+                   if (owner && owner.phone) {
+                       setTargetPhone(formatPhone(owner.phone));
+                       setTargetName(camp.brand_name || "CS Toko");
+                       setIsVisible(true);
+                       return;
+                   }
+               }
+
+               // 🛡️ PROTEKSI: Kalau toko gak ngisi nomor WA di profilnya, SEMBUNYIKAN CS-nya! (Biar gak nyasar ke lu)
+               setIsVisible(false);
+
+           } catch (error) {
+               console.error("Gagal load WA CS:", error);
+               setIsVisible(false);
+           }
+       }
+    };
+
+    checkRouteAndFetchData();
+  }, [pathname]);
+
+  // Helper bersihin format nomor
+  const formatPhone = (phone: string) => {
+    let p = phone.replace(/\D/g, '');
+    if (p.startsWith('0')) p = '62' + p.slice(1);
+    return p;
+  };
 
   // Reset chat pas dibuka pertama kali
   useEffect(() => {
@@ -61,39 +108,33 @@ export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
 
     const userMsg = input;
     setInput("");
-    
-    // 1. Tampilin Chat User
+
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsTyping(true);
 
-    // 2. Bot "Pura-pura Mikir" (1.5 detik)
     setTimeout(() => {
       setIsTyping(false);
       
-      // 3. Bot Jawab Template
       const reply = "Baik kak, pesan kakak akan kami alihkan ke WhatsApp Admin agar lebih cepat dibalas ya! 👇";
       setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
 
-      // 4. Otomatis Buka WhatsApp Owner
       setTimeout(() => {
         const waLink = `https://wa.me/${targetPhone}?text=${encodeURIComponent(userMsg)}`;
         window.open(waLink, '_blank');
-      }, 1000); // Jeda 1 detik setelah bot jawab
+      }, 1000); 
       
     }, 1500);
   };
 
-  // Jangan munculin tombol kalau nomor hp kosong banget (safety check)
-  if (!ownerPhone && !defaultPhone) return null;
+  if (!isVisible) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end font-sans">
       
-      {/* --- JENDELA CHAT (MUNCUL PAS DIKLIK) --- */}
+      {/* --- JENDELA CHAT --- */}
       {isOpen && (
         <div className="mb-4 w-[320px] md:w-[350px] h-[450px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 fade-in duration-300">
           
-          {/* Header Chat */}
           <div className="bg-zinc-950 p-4 flex justify-between items-center text-white border-b border-zinc-800">
             <div className="flex items-center gap-3">
                 <div className="relative">
@@ -112,8 +153,7 @@ export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
             </button>
           </div>
 
-          {/* Area Chat Bubble */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50 dark:bg-black">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50 dark:bg-black custom-scrollbar">
             {messages.map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
@@ -126,7 +166,6 @@ export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
               </div>
             ))}
             
-            {/* Animasi Typing */}
             {isTyping && (
               <div className="flex justify-start">
                  <div className="bg-white dark:bg-zinc-800 border dark:border-zinc-700 p-3 rounded-2xl rounded-tl-none flex gap-1 shadow-sm items-center h-10">
@@ -140,7 +179,6 @@ export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input Area */}
           <div className="p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex gap-2">
             <input 
                 value={input}
@@ -168,7 +206,6 @@ export default function FloatingCS({ ownerPhone, ownerName }: FloatingCSProps) {
       >
         {isOpen ? <X size={24}/> : <MessageCircle size={26} className="fill-current"/>}
         
-        {/* Notif Badge */}
         {!isOpen && (
              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
         )}

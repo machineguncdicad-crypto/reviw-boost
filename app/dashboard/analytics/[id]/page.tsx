@@ -17,6 +17,7 @@ export default function AnalyticsDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<any>(null);
+
   const [stats, setStats] = useState({
     avgRating: 0,
     totalReviews: 0,
@@ -24,7 +25,7 @@ export default function AnalyticsDetailPage() {
     sadCount: 0,
     starCounts: [0, 0, 0, 0, 0]
   });
-  
+
   // State untuk "AI" Insight
   const [aiInsight, setAiInsight] = useState({
       title: "Menganalisa data...",
@@ -40,53 +41,54 @@ export default function AnalyticsDetailPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.push("/login"); return; }
 
-        // 1. Ambil Data Toko
-        let storeData = null;
-        const { data: profile } = await supabase.from("profiles").select("*").eq("id", id).single();
-        if (profile) {
-            storeData = profile;
-        } else {
-            const { data: camp } = await supabase.from("campaigns").select("*").eq("id", id).single();
-            if (camp) storeData = { ...camp, business_name: camp.brand_name };
+        // 🔥 1. AMBIL DATA TOKO (SEKARANG MURNI DARI CAMPAIGNS) 🔥
+        const { data: camp, error: campError } = await supabase
+            .from("campaigns")
+            .select("*")
+            .eq("id", id)
+            .single();
+
+        if (campError || !camp) {
+            setStore(null);
+            return;
         }
 
-        if (storeData) {
-            setStore(storeData);
+        const storeData = { ...camp, business_name: camp.brand_name };
+        setStore(storeData);
 
-            // 2. Ambil Review (Cuma buat hitung statistik, GAK DITAMPILIN)
-            const { data: feedbacks } = await supabase
-                .from("feedbacks")
-                .select("*")
-                .eq("campaign_id", id)
-                .order("created_at", { ascending: false });
+        // 2. Ambil Review (Cuma buat hitung statistik, GAK DITAMPILIN)
+        const { data: feedbacks } = await supabase
+            .from("feedbacks")
+            .select("*")
+            .eq("campaign_id", id)
+            .order("created_at", { ascending: false });
 
-            if (feedbacks) {
-                // 3. Hitung Statistik
-                let total = feedbacks.length;
-                let sumRating = 0;
-                let happy = 0;
-                let sad = 0;
-                let stars = [0, 0, 0, 0, 0];
+        if (feedbacks) {
+            // 3. Hitung Statistik
+            let total = feedbacks.length;
+            let sumRating = 0;
+            let happy = 0;
+            let sad = 0;
+            let stars = [0, 0, 0, 0, 0];
 
-                feedbacks.forEach((r: any) => {
-                    sumRating += r.rating;
-                    if (r.rating >= 4) happy++; else sad++;
-                    if (r.rating >= 1 && r.rating <= 5) stars[r.rating - 1]++;
-                });
+            feedbacks.forEach((r: any) => {
+                sumRating += r.rating;
+                if (r.rating >= 4) happy++; else sad++;
+                if (r.rating >= 1 && r.rating <= 5) stars[r.rating - 1]++;
+            });
 
-                const avg = total > 0 ? Number((sumRating / total).toFixed(1)) : 0;
+            const avg = total > 0 ? Number((sumRating / total).toFixed(1)) : 0;
 
-                setStats({
-                    avgRating: avg,
-                    totalReviews: total,
-                    happyCount: happy,
-                    sadCount: sad,
-                    starCounts: stars
-                });
+            setStats({
+                avgRating: avg,
+                totalReviews: total,
+                happyCount: happy,
+                sadCount: sad,
+                starCounts: stars
+            });
 
-                // 4. GENERATE AI INSIGHT
-                generateSmartInsight(avg, total, happy, sad, storeData.clicks);
-            }
+            // 4. GENERATE AI INSIGHT
+            generateSmartInsight(avg, total, happy, sad, storeData.clicks);
         }
       } catch (err) {
         console.error("Error:", err);
@@ -221,6 +223,7 @@ export default function AnalyticsDetailPage() {
                         {[5, 4, 3, 2, 1].map((star) => {
                             const count = stats.starCounts[star - 1];
                             const percentage = stats.totalReviews > 0 ? (count / stats.totalReviews) * 100 : 0;
+
                             return (
                                 <div key={star} className="flex items-center gap-4">
                                     <div className="w-12 text-sm font-bold text-zinc-400 flex items-center gap-1">{star} <Star size={12} className="fill-zinc-400"/></div>
@@ -248,8 +251,6 @@ export default function AnalyticsDetailPage() {
                     </div>
                 </div>
             </div>
-
-            {/* ✅ BAGIAN REVIEW SUDAH DIHAPUS, HALAMAN BERHENTI DI SINI ✅ */}
             
         </div>
     </div>

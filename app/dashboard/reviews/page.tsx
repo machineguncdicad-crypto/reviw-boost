@@ -9,13 +9,16 @@ import {
 } from "lucide-react";
 import Link from "next/link"; 
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast"; // ✅ Pake Toast
 
 export default function ReviewsPage() {
   const router = useRouter();
+
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterRating, setFilterRating] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
   const [storeNames, setStoreNames] = useState<Record<string, string>>({});
   
   // 🔥 STATUS PRO
@@ -29,61 +32,69 @@ export default function ReviewsPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 🔥 1. CEK STATUS SUBSCRIPTION 🔥
+        // 🔥 1. CEK STATUS SUBSCRIPTION (Hanya untuk ngecek PRO/TIDAK) 🔥
         const { data: profileData } = await supabase
             .from("profiles")
             .select("id, business_name, subscription_status, tier_name") 
             .eq("id", user.id)
             .single();
 
-        // LOGIKA PENENTUAN PRO (LEBIH LONGGAR)
-        // Kita cek tier_name juga biar aman
         if (profileData && (
             profileData.subscription_status === 'pro' || 
             profileData.subscription_status === 'lifetime' ||
-            profileData.subscription_status === 'active' || // Tambahan buat webhook baru
-            (profileData.tier_name && profileData.tier_name !== 'FREE') // Cek Tier
+            profileData.subscription_status === 'active' || 
+            (profileData.tier_name && profileData.tier_name !== 'FREE') 
         )) {
              setIsPro(true);
         } else {
              setIsPro(false);
         }
 
-        // --- Ambil Data Toko & Review ---
-        const { data: campaigns } = await supabase.from("campaigns").select("id, brand_name").eq("user_id", user.id);
+        // 🔥 2. AMBIL DATA TOKO MURNI DARI CAMPAIGNS 🔥
+        const { data: campaigns } = await supabase
+            .from("campaigns")
+            .select("id, brand_name")
+            .eq("user_id", user.id);
 
         const sourceMap: Record<string, string> = {};
         const allIds: string[] = [];
 
-        if (profileData) {
-            sourceMap[profileData.id] = "🏢 Pusat (" + profileData.business_name + ")";
-            allIds.push(profileData.id);
-        }
-
         if (campaigns && campaigns.length > 0) {
             campaigns.forEach((camp: any) => {
-                sourceMap[camp.id] = "📍 " + camp.brand_name;
+                // Kasih icon beda buat toko pusat
+                sourceMap[camp.id] = camp.brand_name.includes("Pusat") 
+                    ? "🏢 " + camp.brand_name 
+                    : "📍 " + camp.brand_name;
                 allIds.push(camp.id);
             });
         }
         setStoreNames(sourceMap);
 
+        // 🔥 3. AMBIL REVIEW BERDASARKAN ID CAMPAIGNS 🔥
         if (allIds.length > 0) {
-            const { data: feedbacks } = await supabase.from("feedbacks").select("*").in("campaign_id", allIds).order("created_at", { ascending: false });
+            const { data: feedbacks } = await supabase
+                .from("feedbacks")
+                .select("*")
+                .in("campaign_id", allIds)
+                .order("created_at", { ascending: false });
+
             if (feedbacks) setReviews(feedbacks);
         }
-      } catch (err) { console.error(err); } finally { setLoading(false); }
+      } catch (err) { 
+        console.error(err); 
+      } finally { 
+        setLoading(false);
+      }
     };
     fetchData();
   }, []);
 
   // --- HANDLE LOCKED ACTION ---
-  // Kalau belum PRO, arahkan ke halaman langganan
   const handleLockedAction = (e?: any) => {
       if (!isPro) {
           if (e) e.preventDefault();
-          router.push("/dashboard/profile?tab=billing"); // Arahin langsung ke tab billing biar to the point
-          return true; 
+          router.push("/dashboard/profile?tab=billing"); 
+          return true;
       }
       return false; 
   };
@@ -95,6 +106,7 @@ export default function ReviewsPage() {
     setIsExporting(true);
     try {
         const headers = ["Nama Pelanggan", "Nomor WA", "Rating", "Komentar", "Tanggal Review", "Asal Toko"];
+
         const rows = filteredReviews.map(r => {
             const cleanComment = r.comment ? r.comment.replace(/"/g, '""').replace(/;/g, ',') : ""; 
             const source = storeNames[r.campaign_id] || "Unknown";
@@ -102,6 +114,7 @@ export default function ReviewsPage() {
             const phone = r.customer_phone ? `'${r.customer_phone}` : '-'; 
             return `"${r.customer_name || 'Anonim'}";"${phone}";"${r.rating}";"${cleanComment}";"${date}";"${source}"`;
         });
+
         const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(";"), ...rows].join("\n");
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -110,9 +123,11 @@ export default function ReviewsPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        
+        toast.success("Data berhasil diekspor!"); // ✅ Pakai Toast biar manis
     } catch (e) {
         console.error("Gagal export:", e);
-        alert("Gagal download data.");
+        toast.error("Gagal download data."); // ✅ Pakai Toast
     } finally {
         setIsExporting(false);
     }
@@ -169,7 +184,7 @@ export default function ReviewsPage() {
             </div>
         </div>
 
-        {/* --- AREA REVIEW (LOGIKA GEMBOK DIPERBAIKI) --- */}
+        {/* --- AREA REVIEW --- */}
         <div className="relative min-h-[500px]"> 
             
             {/* 🔥 LAYAR PELINDUNG (CUMA MUNCUL KALO BUKAN PRO) 🔥 */}
@@ -190,7 +205,6 @@ export default function ReviewsPage() {
                         >
                             Buka Akses Review ↗
                         </button>
-
                     </div>
                 </div>
             )}

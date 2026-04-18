@@ -3,23 +3,37 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
-import axios from "axios"; 
+import axios from "axios";
 import { 
   BarChart3, Star, ExternalLink, 
   Copy, Check, TrendingUp, MousePointer2, 
   QrCode, Plus, ScanLine, Download, 
   AlertCircle, X, ThumbsUp, ArrowLeft, Zap, 
-  BellRing, Rocket, Loader2, Bell 
+  BellRing, Rocket, Loader2 
 } from "lucide-react";
 import Link from "next/link";
+import toast from "react-hot-toast"; // ✅ Pake Toast biar makin premium
+
+export interface Campaign {
+  id: string;
+  user_id: string;
+  brand_name: string;
+  slug: string;
+  google_map_url?: string;
+  visits?: number;
+  clicks?: number;
+  status?: string;
+  created_at?: string;
+}
 
 export default function Dashboard() {
   const router = useRouter();
-  
+
   // --- STATE MANAGEMENT ---
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   
   // State Statistik Real-time
   const [stats, setStats] = useState({
@@ -36,9 +50,8 @@ export default function Dashboard() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  // STATE NOTIF (Cuma butuh status loading kirim aja sekarang)
+  // STATE NOTIF 
   const [isSendingNotif, setIsSendingNotif] = useState(false);
-  // (Variable isSubscribed gw hapus karena kita bikin selalu ready)
 
   // --- LOGIKA UTAMA ---
   useEffect(() => {
@@ -64,18 +77,13 @@ export default function Dashboard() {
         }
 
         // -----------------------------------------------------------
-        // 🔥 BAGIAN NOTIFIKASI (YANG DIUBAH) 🔥
-        // Logic: Cek dulu udah jalan belum? Kalo udah, gausah init ulang.
+        // 🔥 BAGIAN NOTIFIKASI 🔥
         // -----------------------------------------------------------
         if (typeof window !== "undefined") {
-            const w = window as any; 
-            
-            // Cek apakah OneSignal SUDAH ada dan SUDAH init?
+            const w = window as any;
             if (w.OneSignal && w.OneSignal.initialized) {
-                // Kalo udah aktif, cukup login user aja (biar sinkron)
                 w.OneSignal.login(user.id);
             } else {
-                // Kalo belum, baru kita jalankan init
                 w.OneSignalDeferred = w.OneSignalDeferred || [];
                 w.OneSignalDeferred.push(async function (OneSignal: any) {
                     if (!OneSignal.initialized) {
@@ -86,14 +94,13 @@ export default function Dashboard() {
                         });
                     }
                     await OneSignal.login(user.id);
-                    // Otomatis 'Check In' izin notifikasi (tanpa popup ganggu)
                     OneSignal.User.PushSubscription.optIn();
                 });
             }
         }
         // -----------------------------------------------------------
 
-        // 2. Ambil Data Toko Lama
+        // 2. MURNI TARIK DATA DARI TABEL CAMPAIGNS 🔥
         const { data: campaignsData, error: campError } = await supabase
           .from("campaigns")
           .select("*")
@@ -102,41 +109,17 @@ export default function Dashboard() {
 
         if (campError) throw campError;
 
-        // 3. Ambil Data Toko Baru
-        const { data: profileData } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single();
-
-        let finalCampaigns = campaignsData || [];
-
-        if (profileData && profileData.business_name) {
-            const profileAsCampaign = {
-                id: profileData.id,
-                user_id: profileData.id,
-                brand_name: profileData.business_name,
-                slug: profileData.slug || profileData.business_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-                visits: profileData.visits || 0,
-                clicks: profileData.clicks || 0,
-                created_at: profileData.updated_at
-            };
-
-            const exists = finalCampaigns.find((c: any) => c.id === profileAsCampaign.id);
-            if (!exists) {
-                finalCampaigns = [profileAsCampaign, ...finalCampaigns];
-            }
-        }
+        const finalCampaigns: Campaign[] = campaignsData || [];
 
         if (isMounted) {
           setCampaigns(finalCampaigns);
 
-          // 4. HITUNG STATISTIK
-          const campaignIds = finalCampaigns.map((c: any) => c.id);
+          // 3. HITUNG STATISTIK DARI TOKO YANG ADA
+          const campaignIds = finalCampaigns.map((c) => c.id);
           let totalRev = 0, happy = 0, sad = 0;
           let visits = 0, clicks = 0;
 
-          finalCampaigns.forEach(c => {
+          finalCampaigns.forEach((c) => {
               visits += (c.visits || 0);
               clicks += (c.clicks || 0);
           });
@@ -149,7 +132,8 @@ export default function Dashboard() {
 
               if (feedbacks && feedbacks.length > 0) {
                   totalRev = feedbacks.length;
-                  feedbacks.forEach((f: any) => {
+                  
+                  feedbacks.forEach((f: { rating: number }) => {
                       if (f.rating >= 4) happy++; else sad++;
                   });
               }
@@ -182,6 +166,7 @@ export default function Dashboard() {
     const url = `${window.location.origin}/${slug}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
+    toast.success("Link berhasil disalin!");
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -199,11 +184,12 @@ export default function Dashboard() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `QR-Review-${brandName.replace(/\s+/g, '-')}.png`; 
+        a.download = `QR-Review-${brandName.replace(/\s+/g, '-')}.png`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
+        toast.success("QR Code berhasil di-download!");
     } catch (error) {
         console.error("Gagal download:", error);
         window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${window.location.origin}/${slug}`, '_blank');
@@ -216,7 +202,7 @@ export default function Dashboard() {
      try {
         setIsSendingNotif(true);
         const { data: { user } } = await supabase.auth.getUser();
-        
+
         await axios.post('/api/notify', {
             rating: rating,
             comment: `Ini adalah tes notifikasi ${type}. Semangat codingnya! 🚀`,
@@ -227,10 +213,10 @@ export default function Dashboard() {
             owner_email: user?.email 
         });
 
-        alert(`✅ Sukses! Cek HP atau Desktop lu. Harusnya ada notif "${type}".`);
+        toast.success(`Sukses! Cek HP atau Desktop lu. Harusnya ada notif "${type}".`, { duration: 4000 });
      } catch (error) {
         console.error("Gagal kirim notif:", error);
-        alert("❌ Gagal kirim notif. Pastikan API Key benar.");
+        toast.error("Gagal kirim notif. Pastikan API Key benar.");
      } finally {
         setIsSendingNotif(false);
      }
@@ -277,7 +263,7 @@ export default function Dashboard() {
                 </Link>
             </div>
 
-            {/* 🔥 TAMPILAN NOTIFIKASI (YANG DIUBAH: LANGSUNG TOMBOL TES) 🔥 */}
+            {/* TAMPILAN NOTIFIKASI */}
             <div className="bg-white/50 dark:bg-zinc-900/30 backdrop-blur-md border border-zinc-200 dark:border-amber-500/20 rounded-3xl p-6 relative overflow-hidden group shadow-sm">
                <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                    <div className="flex items-start gap-4">
@@ -295,7 +281,6 @@ export default function Dashboard() {
                        </div>
                    </div>
 
-                   {/* TOMBOL TES LANGSUNG MUNCUL */}
                    <div className="flex gap-3 w-full md:w-auto">
                         <button 
                         onClick={() => handleTestNotification(1, "BAHAYA (⭐1)")}
@@ -315,7 +300,6 @@ export default function Dashboard() {
                </div>
             </div>
 
-            {/* SISA KODE KE BAWAH PERSIS SAMA DENGAN PUNYA LU (STATISTIK, PROJECT, DLL) */}
             {/* STATISTIK */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 
@@ -492,25 +476,6 @@ export default function Dashboard() {
                             )}
                         </div>
                     ))}
-                </div>
-            )}
-
-            {/* UPGRADE MODAL */}
-            {showUpgradeModal && (
-                <div className="fixed inset-0 bg-black/50 dark:bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-                    <div className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 w-full max-w-5xl rounded-[2.5rem] p-8 relative overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] overflow-y-auto">
-                        <button onClick={() => setShowUpgradeModal(false)} className="absolute top-6 right-6 p-3 bg-zinc-100 dark:bg-zinc-900 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white z-20 border border-zinc-200 dark:border-zinc-800"><X size={20} /></button>
-                        
-                        <div className="text-center mb-12 mt-6">
-                            <span className="text-amber-500 text-sm font-bold uppercase tracking-widest mb-2 block">Premium Access</span>
-                            <h2 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white mb-4">Upgrade Bisnismu 🚀</h2>
-                            <p className="text-zinc-500 dark:text-zinc-400 text-lg max-w-2xl mx-auto">Investasi kecil untuk reputasi bisnis yang tak ternilai harganya.</p>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                             {/* Pricing Cards */}
-                        </div>
-                    </div>
                 </div>
             )}
         </div>

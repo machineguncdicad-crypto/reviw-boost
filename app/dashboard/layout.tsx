@@ -29,7 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         w.OneSignal = w.OneSignal || [];
         w.OneSignal.push(function() {
           w.OneSignal.init({
-            appId: "72b814c6-9bef-42b8-9fd6-1778f59e6537", 
+            appId: process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID, 
             notifyButton: { enable: true }, 
             allowLocalhostAsSecureOrigin: true,
           });
